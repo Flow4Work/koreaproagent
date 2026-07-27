@@ -84,21 +84,28 @@ export async function POST(request) {
   let body = {};
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid request body." }, { status: 400 }); }
   const candidate = body?.candidate || {};
+  const mode = body.mode === "deep" ? "deep" : "fast";
   if (!clean(candidate.company) || !/^https?:\/\//i.test(clean(candidate.url))) return Response.json({ error: "A valid candidate is required." }, { status: 400 });
 
   const prompt = `Research this ONE overseas SaaS/AI company for our Korea Pipeline Pilot.\n\nCOMPANY\n${clean(candidate.company, 140)}\n${clean(candidate.url, 350)}\nCurrent trigger from stage 1: ${clean(candidate.trigger, 700)}\nKnown sources: ${(candidate.source_urls || []).join(" | ")}\n\nOUR OFFER\nFor KRW 390,000 we map Korean companies likely to buy its product, current buying reasons, relevant buyer roles, and personalized outreach before it hires a Korea team.\n\nTASK\n1. Verify the product and current expansion/need signal.\n2. Explain why this company could buy our Korea pilot now.\n3. Find 1-3 REAL Korean companies that plausibly need its product, with official URLs and evidence where possible.\n4. Find a publicly verified decision maker only if evidence is clear; otherwise return the best role + a search query. Never guess emails.\n5. Write one short English cold email mentioning a verified trigger and that we already mapped a few Korea-fit accounts.\n6. Score 0-100 using Korea fit, trigger strength, buyer accessibility, evidence quality.\n\nReturn JSON only:\n{"lead":{"company":"","url":"","country":"","category":"","fit_score":0,"why_buy_our_service":"","why_now":"","source_urls":[],"decision_maker_name":"","decision_maker_title":"","decision_maker_profile_url":"","recommended_role":"","contact_search_query":"","korea_opportunity":"","sample_korean_targets":[{"company":"","url":"","reason":"","source_urls":[]}],"outreach_en":"","outreach_ko":"","confidence":"high|medium|low","warning":""}}`;
 
-  const attempts = [
-    { model: "groq/compound", timeoutMs: 30000, deep: true },
-    { model: "groq/compound-mini", timeoutMs: 16000, deep: false }
-  ];
+  const attempts = mode === "deep"
+    ? [
+        { model: "groq/compound", timeoutMs: 30000, deep: true },
+        { model: "groq/compound-mini", timeoutMs: 16000, deep: false }
+      ]
+    : [
+        { model: "groq/compound-mini", timeoutMs: 16000, deep: false },
+        { model: "groq/compound", timeoutMs: 26000, deep: true }
+      ];
+
   const failures = [];
   for (const attempt of attempts) {
     try {
       const data = await callGroq({ ...attempt, prompt });
       const lead = sanitizeLead(data, candidate);
       if (!lead.why_buy_our_service && !lead.korea_opportunity) throw new Error("Enrichment returned insufficient data");
-      return Response.json({ lead, meta: { model: attempt.model, fallback_used: attempt !== attempts[0] } }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ lead, meta: { model: attempt.model, mode, fallback_used: attempt !== attempts[0] } }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       failures.push(error?.name === "AbortError" ? "timeout" : clean(error?.message, 600));
     }
