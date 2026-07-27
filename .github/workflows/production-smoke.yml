@@ -12,7 +12,7 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
       - name: Wait for production and quota cooldown
         run: sleep 70
@@ -22,9 +22,9 @@ jobs:
           set -euo pipefail
           curl -fsS --retry 4 --retry-delay 5 --max-time 20 https://koreaproagent.vercel.app/api/health -o /tmp/health.json
           cat /tmp/health.json
-          node -e "const d=require('/tmp/health.json'); if(!d.groqConnected) process.exit(1)"
+          node -e "const d=require('/tmp/health.json'); if(!d.groqConnected || d.allModelsAvailable === false) process.exit(1)"
 
-      - name: Client discovery end-to-end
+      - name: Sales discovery end-to-end
         run: |
           set -euo pipefail
           STATUS=$(curl -sS --max-time 115 -o /tmp/discovery.json -w '%{http_code}' \
@@ -43,5 +43,30 @@ jobs:
             if (!Array.isArray(lead.source_urls) || lead.source_urls.length < 1) throw new Error('Lead missing evidence URL');
             if (!lead.outreach_en) throw new Error('Lead missing outreach email');
           }
-          console.log(`PASS: ${d.leads.length} verified lead(s), pipeline=${d.meta?.pipeline}`);
+          console.log(`SALES PASS: ${d.leads.length} lead(s), pipeline=${d.meta?.pipeline}`);
+          NODE
+
+      - name: Cool down model TPM before delivery
+        run: sleep 70
+
+      - name: Delivery generation end-to-end
+        run: |
+          set -euo pipefail
+          STATUS=$(curl -sS --max-time 115 -o /tmp/delivery.json -w '%{http_code}' \
+            -X POST https://koreaproagent.vercel.app/api/analyze \
+            -H 'Content-Type: application/json' \
+            --data '{"clientUrl":"https://www.intercom.com","productHint":"AI customer support SaaS","targetNotes":"Korean ecommerce or app companies with meaningful customer support demand"}')
+          echo "HTTP $STATUS"
+          cat /tmp/delivery.json
+          test "$STATUS" -ge 200 -a "$STATUS" -lt 300
+          node <<'NODE'
+          const fs = require('fs');
+          const d = JSON.parse(fs.readFileSync('/tmp/delivery.json', 'utf8'));
+          if (!Array.isArray(d.prospects) || d.prospects.length < 1) throw new Error('No Korean prospects returned');
+          for (const p of d.prospects) {
+            if (!p.company || !p.url) throw new Error('Prospect missing company/url');
+            if (!Array.isArray(p.source_urls) || p.source_urls.length < 1) throw new Error('Prospect missing evidence URL');
+            if (!p.message_ko && !p.message_en) throw new Error('Prospect missing outreach message');
+          }
+          console.log(`DELIVERY PASS: ${d.prospects.length} prospect(s), pipeline=${d.meta?.pipeline}`);
           NODE
