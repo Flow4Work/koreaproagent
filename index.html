@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/workflow.css?v=20260727-7" />
+  <link rel="stylesheet" href="/workflow.css?v=20260727-8" />
 </head>
 <body>
   <div class="shell">
@@ -25,7 +25,7 @@
     <main class="simple-main">
       <section class="simple-intro">
         <h1>해외 고객 찾기 → 메일 보내기 → 답장 오면 납품</h1>
-        <p>지금 할 일은 해외 SaaS 3곳을 찾고 실제 담당자에게 첫 메일을 보내는 것입니다.</p>
+        <p>지금 할 일은 한국 진출 전 단계의 해외 SaaS를 찾아 실제 담당자에게 첫 메일을 보내는 것입니다.</p>
       </section>
 
       <nav class="workflow-switch" aria-label="작업 선택">
@@ -35,18 +35,18 @@
 
       <section class="workspace" id="salesWorkspace">
         <aside class="panel input-panel">
-          <div class="panel-head"><div><span class="step">1</span><h2>연락할 해외 SaaS 3곳 찾기</h2></div><button class="ghost small" id="salesDemo">추천 조건</button></div>
+          <div class="panel-head"><div><span class="step">1</span><h2>연락할 해외 SaaS 찾기</h2></div><button class="ghost small" id="salesDemo">추천 조건</button></div>
           <label>찾을 회사 조건 <span>선택</span>
             <textarea id="salesFocus" rows="5" placeholder="비워도 됩니다. 추천 조건을 눌러도 됩니다."></textarea>
           </label>
-          <button class="primary" id="salesRunBtn"><span>해외 고객 3곳 찾기</span></button>
-          <p class="hint">웹 검색은 Groq, 결과 정리는 strict JSON 구조화를 사용합니다. 결과가 나오면 1위부터 담당자를 찾아 메일을 보내세요.</p>
+          <button class="primary" id="salesRunBtn"><span>검증된 해외 고객 찾기</span></button>
+          <p class="hint">Tavily로 후보를 검색하고 Groq로 정리한 뒤, 공식 홈페이지와 한국 현지 조직 존재 여부를 다시 확인합니다.</p>
         </aside>
 
         <section class="panel result-panel">
           <div class="result-head"><div><span class="step">결과</span><h2>연락할 회사</h2></div><div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV</button></div></div>
-          <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>아직 찾은 회사가 없습니다.</h3><p>왼쪽에서 해외 고객 3곳 찾기를 누르세요.</p></div>
-          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>현재 웹을 검색하고 있습니다.</h3><p>검색과 결과 정리를 분리해 실행합니다. 보통 한 번의 실행으로 끝납니다.</p><div class="progress"><span></span></div></div>
+          <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>아직 찾은 회사가 없습니다.</h3><p>왼쪽에서 검증된 해외 고객 찾기를 누르세요.</p></div>
+          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>후보를 찾고 다시 검증하고 있습니다.</h3><p>Tavily 검색 → Groq 정리 → 공식 URL/한국 조직 재검증 순서입니다.</p><div class="progress"><span></span></div></div>
           <div class="error-box hidden" id="salesError"></div>
           <div class="results hidden" id="salesResults">
             <div class="next-box" id="salesNext"></div>
@@ -64,19 +64,20 @@
           <label>제품 설명 <span>선택</span><textarea id="productHint" rows="3" placeholder="예: AI 고객지원 자동화 SaaS"></textarea></label>
           <label>한국 타깃 조건 <span>선택</span><textarea id="targetNotes" rows="3" placeholder="예: 한국 이커머스 중 CS 채용이 늘어난 회사"></textarea></label>
           <label>참고할 한국 기업 <span>선택</span><textarea id="seeds" rows="3" placeholder="비워도 자동으로 찾습니다."></textarea></label>
-          <button class="primary" id="runBtn"><span>한국 영업 후보 5곳 만들기</span></button>
+          <button class="primary" id="runBtn"><span>한국 영업 후보 만들기</span></button>
         </aside>
 
         <section class="panel result-panel">
           <div class="result-head"><div><span class="step">납품</span><h2>한국 영업 후보</h2></div><div class="actions"><button class="ghost small" id="exportCsv" disabled>CSV</button></div></div>
           <div class="empty" id="emptyState"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>고객 URL을 넣고 납품 자료를 만드세요.</h3><p>한국 기업 · 구매 신호 · 담당 역할 · 영업문을 정리합니다.</p></div>
-          <div class="loading hidden" id="loadingState"><div class="spinner"></div><h3>한국 시장을 조사하고 있습니다.</h3><p>웹 리서치 후 strict JSON으로 납품 데이터를 정리합니다.</p><div class="progress"><span></span></div></div>
+          <div class="loading hidden" id="loadingState"><div class="spinner"></div><h3>한국 시장을 조사하고 있습니다.</h3><p>Tavily 검색 후 Groq가 납품 데이터를 정리합니다.</p><div class="progress"><span></span></div></div>
           <div class="error-box hidden" id="errorState"></div>
           <div class="results hidden" id="results"><div class="summary-grid" id="summaryGrid"></div><div class="tabs"><button class="tab active" data-tab="prospects">기업</button><button class="tab" data-tab="contacts">담당자</button><button class="tab" data-tab="messages">메시지</button><button class="tab" data-tab="strategy">다음 할 일</button></div><div id="tabContent"></div></div>
         </section>
       </section>
     </main>
   </div>
-  <script src="/app.js?v=20260727-7" defer></script>
+  <script>if(localStorage.getItem('kpa.ui.version')!=='20260727-8'){['kpa.sales.result','kpa.delivery.result'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('kpa.ui.version','20260727-8');}</script>
+  <script src="/app.js?v=20260727-8" defer></script>
 </body>
 </html>
