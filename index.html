@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="해외 SaaS URL을 한국 잠재고객 영업팩으로 바꾸는 내부 GTM 리서치 MVP" />
+  <meta name="description" content="해외 SaaS 고객을 자동 발굴하고 계약 후 한국 세일즈 파이프라인을 만드는 Korea GTM Agent" />
   <title>Korea Prospect Agent</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -15,104 +15,79 @@
     <header class="topbar">
       <div class="brand">
         <div class="logo">K</div>
-        <div>
-          <strong>Korea Prospect Agent</strong>
-          <span>Internal GTM Research MVP</span>
-        </div>
+        <div><strong>Korea Prospect Agent</strong><span>Find client → Sell pilot → Deliver pipeline</span></div>
       </div>
       <div class="status" id="apiStatus"><span class="dot"></span><span>연결 확인 중</span></div>
     </header>
 
     <main>
-      <section class="hero">
-        <p class="eyebrow">URL → KOREA PROSPECT PACK</p>
-        <h1>한국에서 <em>누구에게, 왜, 지금</em> 팔아야 하는지 찾습니다.</h1>
-        <p>제품 분석 → 한국 타깃 발굴 → 구매 신호 → 담당 직책 → 영업 메시지 → CSV/JSON 납품까지 한 번에.</p>
+      <section class="hero compact-hero">
+        <p class="eyebrow">KOREA GTM REVENUE LOOP</p>
+        <h1><em>고객을 찾고</em>, 팔고, 바로 납품합니다.</h1>
+        <p>① 해외 SaaS 구매후보 자동 발굴 → 무료 한국 타깃 샘플로 아웃바운드 → ② 계약되면 한국 영업 파이프라인 생성.</p>
       </section>
 
-      <section class="workspace">
+      <section class="money-flow" aria-label="수익 흐름">
+        <div><b>01</b><span>우리 고객 찾기</span><small>해외 SaaS/AI</small></div>
+        <i>→</i>
+        <div><b>₩</b><span>Pipeline Pilot 판매</span><small>초기 제안 390,000원</small></div>
+        <i>→</i>
+        <div><b>02</b><span>고객 납품</span><small>한국 잠재고객 + 메시지</small></div>
+      </section>
+
+      <nav class="workflow-switch" aria-label="Agent 선택">
+        <button class="workflow-btn active" data-workflow="sales"><span>01</span> 내 고객 자동 발굴 <small>돈 버는 Agent</small></button>
+        <button class="workflow-btn" data-workflow="delivery"><span>02</span> 고객 납품 <small>계약 후 Agent</small></button>
+      </nav>
+
+      <section class="workspace" id="salesWorkspace">
         <aside class="panel input-panel">
-          <div class="panel-head">
-            <div><span class="step">01</span><h2>리서치 입력</h2></div>
-            <button class="ghost small" id="fillDemo">예시 채우기</button>
-          </div>
-
-          <label>고객 SaaS URL <b>*</b>
-            <input id="clientUrl" type="url" placeholder="https://example.com" autocomplete="url" />
+          <div class="panel-head"><div><span class="step">01</span><h2>내 고객 찾기</h2></div><button class="ghost small" id="salesDemo">추천 조건</button></div>
+          <div class="callout"><strong>내가 파는 것</strong><p>해외 SaaS가 한국팀을 뽑기 전에, 한국에서 살 가능성이 높은 기업과 접촉 이유를 만들어주는 <b>Korea Pipeline Pilot</b>.</p></div>
+          <label>찾을 고객 조건 <span>선택</span>
+            <textarea id="salesFocus" rows="5" placeholder="예: Seed~Series B B2B SaaS/AI, APAC 확장 신호가 있고 아직 한국 영업조직이 약한 회사"></textarea>
           </label>
-
-          <label>제품 설명 <span>선택</span>
-            <textarea id="productHint" rows="3" placeholder="예: AI 고객지원 자동화 SaaS. 이커머스/마켓플레이스가 주요 고객."></textarea>
-          </label>
-
-          <label>한국 타깃 조건 <span>선택</span>
-            <textarea id="targetNotes" rows="3" placeholder="예: 직원 50명 이상, 최근 해외 확장/CS 채용이 있는 한국 기업 우선"></textarea>
-          </label>
-
-          <label>시드 기업 <span>선택 · 한 줄에 하나</span>
-            <textarea id="seeds" rows="4" placeholder="무신사 https://www.musinsa.com&#10;오늘의집 https://ohou.se"></textarea>
-          </label>
-
           <div class="row two">
-            <label>잠재고객 수
-              <select id="count">
-                <option value="5">5개</option>
-                <option value="8" selected>8개</option>
-                <option value="10">10개</option>
-                <option value="15">15개</option>
-              </select>
-            </label>
-            <label>리서치 모드
-              <select id="mode">
-                <option value="fast">Fast</option>
-                <option value="deep" selected>Deep</option>
-              </select>
-            </label>
+            <label>후보 수<select id="salesCount"><option value="3">3개</option><option value="5" selected>5개</option><option value="8">8개</option></select></label>
+            <label>리서치 모드<select id="salesMode"><option value="fast">Fast</option><option value="deep" selected>Deep</option></select></label>
           </div>
-
-          <button class="primary" id="runBtn"><span>한국 잠재고객 분석</span><kbd>⌘↵</kbd></button>
-          <p class="hint">공개 출처가 없는 사람 이름·이메일은 생성하지 않습니다.</p>
+          <button class="primary" id="salesRunBtn"><span>돈 될 고객 자동 발굴</span></button>
+          <p class="hint">각 해외 회사마다 한국 잠재고객 샘플 최대 3곳 + 영업문까지 자동 생성합니다.</p>
         </aside>
 
         <section class="panel result-panel">
-          <div class="result-head">
-            <div><span class="step">02</span><h2>Prospect Pack</h2></div>
-            <div class="actions">
-              <button class="ghost small" id="exportCsv" disabled>CSV</button>
-              <button class="ghost small" id="exportJson" disabled>JSON</button>
-            </div>
-          </div>
+          <div class="result-head"><div><span class="step">RESULT</span><h2>판매 후보</h2></div><div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV</button><button class="ghost small" id="salesJson" disabled>JSON</button></div></div>
+          <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>버튼 하나로 우리가 연락할 해외 고객을 찾습니다.</h3><p>회사 → 지금 살 이유 → 한국 샘플 → 담당자 → 보낼 메시지 순으로 나옵니다.</p></div>
+          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>해외 SaaS 구매후보를 찾고 있습니다.</h3><p>확장 신호와 한국 시장 적합성을 조사하고 무료 샘플까지 만듭니다.</p><div class="progress"><span></span></div></div>
+          <div class="error-box hidden" id="salesError"></div>
+          <div class="results hidden" id="salesResults"><div class="summary-grid" id="salesSummary"></div><div class="tabs"><button class="tab active" data-sales-tab="leads">고객 후보</button><button class="tab" data-sales-tab="messages">영업문</button><button class="tab" data-sales-tab="strategy">오늘 할 일</button></div><div id="salesContent"></div></div>
+        </section>
+      </section>
 
-          <div class="empty" id="emptyState">
-            <div class="radar"><i></i><i></i><i></i><span></span></div>
-            <h3>리서치 결과가 여기에 표시됩니다.</h3>
-            <p>처음에는 5~8개로 품질을 확인한 뒤 늘리는 것을 권장합니다.</p>
-          </div>
+      <section class="workspace hidden" id="deliveryWorkspace">
+        <aside class="panel input-panel">
+          <div class="panel-head"><div><span class="step">02</span><h2>고객 납품</h2></div><button class="ghost small" id="fillDemo">예시 채우기</button></div>
+          <div class="callout"><strong>계약 후 실행</strong><p>돈을 받은 해외 SaaS URL을 넣으면 실제 <b>Korea Prospect Pack</b>을 만들어 납품합니다.</p></div>
+          <label>고객 SaaS URL <b>*</b><input id="clientUrl" type="url" placeholder="https://example.com" autocomplete="url" /></label>
+          <label>제품 설명 <span>선택</span><textarea id="productHint" rows="3" placeholder="예: AI 고객지원 자동화 SaaS"></textarea></label>
+          <label>한국 타깃 조건 <span>선택</span><textarea id="targetNotes" rows="3" placeholder="예: 직원 50명 이상, 최근 해외 확장/CS 채용 기업 우선"></textarea></label>
+          <label>시드 기업 <span>선택</span><textarea id="seeds" rows="3" placeholder="비워도 Agent가 직접 찾습니다."></textarea></label>
+          <div class="row two"><label>잠재고객 수<select id="count"><option value="5">5개</option><option value="8" selected>8개</option><option value="10">10개</option><option value="15">15개</option></select></label><label>리서치 모드<select id="mode"><option value="fast">Fast</option><option value="deep" selected>Deep</option></select></label></div>
+          <button class="primary" id="runBtn"><span>Korea Pipeline 생성</span></button>
+          <p class="hint">공개 출처가 없는 사람 이름·이메일은 만들지 않습니다.</p>
+        </aside>
 
-          <div class="loading hidden" id="loadingState">
-            <div class="spinner"></div>
-            <h3 id="loadingTitle">한국 시장을 조사하고 있습니다.</h3>
-            <p id="loadingText">제품 → ICP → 기업 → 구매신호 → 접촉 메시지 순으로 정리합니다.</p>
-            <div class="progress"><span></span></div>
-          </div>
-
+        <section class="panel result-panel">
+          <div class="result-head"><div><span class="step">DELIVERY</span><h2>Korea Prospect Pack</h2></div><div class="actions"><button class="ghost small" id="exportCsv" disabled>CSV</button><button class="ghost small" id="exportJson" disabled>JSON</button></div></div>
+          <div class="empty" id="emptyState"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>고객에게 줄 영업 파이프라인이 여기에 나옵니다.</h3><p>한국 기업 · 구매신호 · 담당 역할 · 메시지까지 한 번에.</p></div>
+          <div class="loading hidden" id="loadingState"><div class="spinner"></div><h3>한국 시장을 조사하고 있습니다.</h3><p>제품 → ICP → 기업 → 구매신호 → 접촉 메시지 순으로 정리합니다.</p><div class="progress"><span></span></div></div>
           <div class="error-box hidden" id="errorState"></div>
-
-          <div class="results hidden" id="results">
-            <div class="summary-grid" id="summaryGrid"></div>
-            <div class="tabs" role="tablist">
-              <button class="tab active" data-tab="prospects">기업</button>
-              <button class="tab" data-tab="contacts">담당자</button>
-              <button class="tab" data-tab="messages">메시지</button>
-              <button class="tab" data-tab="strategy">전략</button>
-            </div>
-            <div id="tabContent"></div>
-          </div>
+          <div class="results hidden" id="results"><div class="summary-grid" id="summaryGrid"></div><div class="tabs"><button class="tab active" data-tab="prospects">기업</button><button class="tab" data-tab="contacts">담당자</button><button class="tab" data-tab="messages">메시지</button><button class="tab" data-tab="strategy">전략</button></div><div id="tabContent"></div></div>
         </section>
       </section>
     </main>
 
-    <footer>Built for evidence-first Korea GTM research · Verify before outreach</footer>
+    <footer>Find client → sell the pilot → deliver Korea pipeline · Verify before outreach</footer>
   </div>
   <script src="/app.js" defer></script>
 </body>
