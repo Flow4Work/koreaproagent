@@ -2,4 +2,4 @@
 
 This branch exists only to trigger the production end-to-end smoke test against `koreaproagent.vercel.app`.
 
-Run: real user flow — health check, then client discovery only.
+Run: isolated E2E after quota cooldown; no pre-search diagnostic.
