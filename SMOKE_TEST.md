@@ -2,4 +2,4 @@
 
 This branch exists only to trigger the production end-to-end smoke test against `koreaproagent.vercel.app`.
 
-Run: reliability + semantic quality E2E.
+Run: isolated delivery production E2E.
