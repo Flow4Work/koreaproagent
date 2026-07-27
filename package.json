@@ -1,0 +1,15 @@
+{
+  "name": "korea-prospect-agent-mvp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal MVP that turns a SaaS URL into a sourced Korea prospect pack.",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel",
+    "deploy:prod": "vercel --prod"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module"
+}
