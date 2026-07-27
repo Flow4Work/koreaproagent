@@ -1,0 +1,53 @@
+name: Production Smoke Test
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Wait for Vercel deployment
+        run: sleep 25
+
+      - name: Health check
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 4 --retry-delay 5 --max-time 20 \
+            https://koreaproagent.vercel.app/api/health \
+            -o /tmp/health.json
+          cat /tmp/health.json
+          node -e "const d=require('/tmp/health.json'); if(!d.groqConnected) process.exit(1)"
+
+      - name: Real web-search diagnostic
+        run: |
+          set -euo pipefail
+          curl -fsS --retry 2 --retry-delay 5 --max-time 35 \
+            'https://koreaproagent.vercel.app/api/diagnostics?search=1' \
+            -o /tmp/diag.json
+          cat /tmp/diag.json
+          node -e "const d=require('/tmp/diag.json'); if(!d.ok || !d.checks?.search?.ok) process.exit(1)"
+
+      - name: Client discovery end-to-end
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 115 \
+            -X POST https://koreaproagent.vercel.app/api/discover-clients \
+            -H 'Content-Type: application/json' \
+            --data '{"focus":"Seed to Series B B2B SaaS or AI companies with a recent APAC expansion signal and a clear Korea B2B use case"}' \
+            -o /tmp/discovery.json
+          cat /tmp/discovery.json
+          node <<'NODE'
+          const fs = require('fs');
+          const d = JSON.parse(fs.readFileSync('/tmp/discovery.json', 'utf8'));
+          if (!Array.isArray(d.leads) || d.leads.length < 1) throw new Error('No leads returned');
+          for (const lead of d.leads) {
+            if (!lead.company || !lead.url) throw new Error('Lead missing company/url');
+            if (!Array.isArray(lead.source_urls) || lead.source_urls.length < 1) throw new Error('Lead missing evidence URL');
+            if (!lead.outreach_en) throw new Error('Lead missing outreach email');
+          }
+          console.log(`PASS: ${d.leads.length} verified lead(s), pipeline=${d.meta?.pipeline}`);
+          NODE
