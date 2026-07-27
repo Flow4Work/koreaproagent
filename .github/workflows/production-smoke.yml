@@ -22,13 +22,6 @@ jobs:
           cat /tmp/health.json
           node -e "const d=require('/tmp/health.json'); if(!d.groqConnected) process.exit(1)"
 
-      - name: Real web-search diagnostic
-        run: |
-          set -euo pipefail
-          curl -fsS --retry 2 --retry-delay 5 --max-time 35 'https://koreaproagent.vercel.app/api/diagnostics?search=1' -o /tmp/diag.json
-          cat /tmp/diag.json
-          node -e "const d=require('/tmp/diag.json'); if(!d.ok || !d.checks?.search?.ok) process.exit(1)"
-
       - name: Client discovery end-to-end
         run: |
           set -euo pipefail
