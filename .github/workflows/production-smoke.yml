@@ -1,19 +1,21 @@
 name: Production Smoke Test
 
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: production-smoke
+  cancel-in-progress: true
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - name: Wait for Vercel deployment
-        run: sleep 35
+      - name: Wait for production and quota cooldown
+        run: sleep 70
 
       - name: Health check
         run: |
