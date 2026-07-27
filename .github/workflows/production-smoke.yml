@@ -14,34 +14,42 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 7
     steps:
-      - name: Wait for production and quota cooldown
-        run: sleep 70
+      - name: Wait for production deployment
+        run: sleep 45
 
       - name: Health check
         run: |
           set -euo pipefail
           curl -fsS --retry 4 --retry-delay 5 --max-time 20 https://koreaproagent.vercel.app/api/health -o /tmp/health.json
           cat /tmp/health.json
-          node -e "const d=require('/tmp/health.json'); if(!d.groqConnected || d.allModelsAvailable === false) process.exit(1)"
+          node -e "const d=require('/tmp/health.json'); if(!d.groqConnected || !d.tavilyConfigured || d.searchProvider !== 'tavily') process.exit(1)"
 
-      - name: Delivery generation end-to-end
+      - name: Sales qualification end-to-end
         run: |
           set -euo pipefail
-          STATUS=$(curl -sS --max-time 115 -o /tmp/delivery.json -w '%{http_code}' \
-            -X POST https://koreaproagent.vercel.app/api/analyze \
+          STATUS=$(curl -sS --max-time 115 -o /tmp/sales.json -w '%{http_code}' \
+            -X POST https://koreaproagent.vercel.app/api/discover-clients \
             -H 'Content-Type: application/json' \
-            --data '{"clientUrl":"https://www.intercom.com","productHint":"AI customer support SaaS","targetNotes":"Korean ecommerce or app companies with meaningful customer support demand"}')
+            --data '{"focus":"Seed to Series B B2B SaaS or AI companies expanding in APAC, with no established Korea office or Korea sales team"}')
           echo "HTTP $STATUS"
-          cat /tmp/delivery.json
+          cat /tmp/sales.json
           test "$STATUS" -ge 200 -a "$STATUS" -lt 300
           node <<'NODE'
           const fs = require('fs');
-          const d = JSON.parse(fs.readFileSync('/tmp/delivery.json', 'utf8'));
-          if (!Array.isArray(d.prospects) || d.prospects.length < 1) throw new Error('No Korean prospects returned');
-          for (const p of d.prospects) {
-            if (!p.company || !p.url) throw new Error('Prospect missing company/url');
-            if (!Array.isArray(p.source_urls) || p.source_urls.length < 1) throw new Error('Prospect missing evidence URL');
-            if (!p.message_ko && !p.message_en) throw new Error('Prospect missing outreach message');
+          const d = JSON.parse(fs.readFileSync('/tmp/sales.json', 'utf8'));
+          const blocked = ['instagram.com','facebook.com','linkedin.com','techcrunch.com','reuters.com','prnewswire.com','businesswire.com','crunchbase.com'];
+          const hangul = s => (String(s).match(/[가-힣]/g) || []).length;
+          if (!Array.isArray(d.leads) || d.leads.length < 1) throw new Error('No qualified buyers returned');
+          if (!String(d.meta?.pipeline || '').toLowerCase().includes('tavily')) throw new Error('Tavily pipeline not used');
+          for (const lead of d.leads) {
+            if (!lead.company || !lead.url) throw new Error('Missing company or official URL');
+            const host = new URL(lead.url).hostname.replace(/^www\./,'');
+            if (blocked.some(x => host === x || host.endsWith('.'+x))) throw new Error(`Evidence URL leaked as company URL: ${lead.company} -> ${host}`);
+            if (/airwallex/i.test(lead.company)) throw new Error('Airwallex must be excluded because it has established Korea operations');
+            if (/south korea|대한민국|한국/i.test(String(lead.country))) throw new Error(`Korea-based buyer leaked: ${lead.company}`);
+            if (hangul(lead.why_buy_our_service) < 12 || hangul(lead.why_now) < 12 || hangul(lead.korea_opportunity) < 12) throw new Error(`Korean explanation missing: ${lead.company}`);
+            if (!Array.isArray(lead.source_urls) || lead.source_urls.length < 1) throw new Error(`Evidence missing: ${lead.company}`);
+            if (!/3-account sample/i.test(lead.outreach_en)) throw new Error(`Wrong outreach offer: ${lead.company}`);
           }
-          console.log(`DELIVERY PASS: ${d.prospects.length} prospect(s), pipeline=${d.meta?.pipeline}`);
+          console.log(`SALES QUALITY PASS: ${d.leads.length} buyer(s), pipeline=${d.meta?.pipeline}`);
           NODE
