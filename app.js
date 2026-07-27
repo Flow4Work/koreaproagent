@@ -8,13 +8,23 @@ function metric(label,value){return `<div class="metric"><span>${escapeHtml(labe
 function sourceLinks(urls=[]){return `<div class="source-links">${urls.map((u,i)=>{const s=safeUrl(u);return s?`<a href="${escapeHtml(s)}" target="_blank" rel="noopener noreferrer">근거 ${i+1}</a>`:''}).join('')}</div>`}
 function csvCell(v){const s=Array.isArray(v)?v.join(' | '):String(v??'');return `"${s.replace(/"/g,'""')}"`;}
 function download(name,type,content){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 
 async function readJsonResponse(response) {
   const text = await response.text();
   let data = null;
   try { data = text ? JSON.parse(text) : {}; }
-  catch { throw new Error(`API가 JSON을 반환하지 않았습니다 (HTTP ${response.status}).`); }
-  if (!response.ok) throw new Error(`${data?.error || data?.message || `HTTP ${response.status}`}${data?.hint ? ` · ${data.hint}` : ''}`);
+  catch {
+    const error = new Error(`API가 JSON을 반환하지 않았습니다 (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
+  if (!response.ok) {
+    const error = new Error(`${data?.error || data?.message || `HTTP ${response.status}`}${data?.hint ? ` · ${data.hint}` : ''}`);
+    error.status = response.status;
+    error.data = data;
+    throw error;
+  }
   return data;
 }
 
@@ -25,7 +35,11 @@ async function requestJson(url, payload, timeoutMs = 45000) {
     const response = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload), cache:'no-store', signal:controller.signal });
     return await readJsonResponse(response);
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error(`${url} 요청이 ${Math.round(timeoutMs/1000)}초를 넘겨 중단됐습니다.`);
+    if (error?.name === 'AbortError') {
+      const e = new Error(`${url} 요청이 ${Math.round(timeoutMs/1000)}초를 넘겨 중단됐습니다.`);
+      e.status = 504;
+      throw e;
+    }
     throw error;
   } finally { clearTimeout(timer); }
 }
@@ -35,13 +49,36 @@ async function checkHealth(){
     const d = await readJsonResponse(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
     const connected = Boolean(d.groqConnected);
     $('apiStatus').className=`status ${connected?'ok':'bad'}`;
-    $('apiStatus').title = connected ? `Groq API 정상 · ${d.model || ''}` : (d.error || 'Groq API 연결 실패');
-    $('apiStatus').innerHTML=`<span class="dot"></span><span>${connected?'Groq 실제 연결됨':'Groq 연결 실패'}</span>`;
+    $('apiStatus').title = connected ? `Groq 인증 정상 · ${d.model || ''}` : (d.error || 'Groq API 연결 실패');
+    $('apiStatus').innerHTML=`<span class="dot"></span><span>${connected?'Groq 인증 정상':'Groq 연결 실패'}</span>`;
     return connected;
   }catch(error){
     $('apiStatus').className='status bad'; $('apiStatus').title=error.message||'API 확인 실패';
     $('apiStatus').innerHTML='<span class="dot"></span><span>API 확인 실패</span>'; return false;
   }
+}
+
+function diagLine(name, check){
+  const ok = check?.ok === true;
+  const skipped = check?.skipped === true;
+  const mark = skipped ? '–' : (ok ? '✓' : '✕');
+  const cls = skipped ? '' : (ok ? 'diag-ok' : 'diag-bad');
+  const detail = [check?.status ? `HTTP ${check.status}` : '', check?.duration_ms ? `${check.duration_ms}ms` : '', check?.rate?.remaining_tokens ? `tokens ${check.rate.remaining_tokens}` : ''].filter(Boolean).join(' · ');
+  return `<div class="diag-row"><b class="${cls}">${mark}</b><span>${escapeHtml(name)}</span><small>${escapeHtml(detail || check?.message || '')}</small></div>`;
+}
+
+async function runDiagnostics(){
+  const btn=$('diagBtn'); const panel=$('diagPanel');
+  btn.disabled=true; btn.textContent='진단 중…'; panel.classList.remove('hidden');
+  panel.innerHTML='<strong>실제 Groq 인증 + 웹검색을 테스트하고 있습니다.</strong>';
+  try{
+    const response=await fetch(`/api/diagnostics?search=1&t=${Date.now()}`,{cache:'no-store'});
+    const text=await response.text(); let d={}; try{d=JSON.parse(text)}catch{throw new Error(`진단 API JSON 오류 · HTTP ${response.status}`)}
+    const checks=d.checks||{};
+    panel.innerHTML=`<div class="diag-head"><strong>${d.ok?'서비스 진단 정상':'문제 발견'}</strong><button id="diagClose" class="ghost small">닫기</button></div>${diagLine('환경변수',checks.env)}${diagLine('Groq 인증',checks.auth)}${diagLine('실제 웹검색',checks.search)}${!d.ok?'<p>실패 항목을 기준으로 아래 고객 발굴을 멈추고 먼저 원인을 해결하세요.</p>':''}`;
+    $('diagClose')?.addEventListener('click',()=>panel.classList.add('hidden'));
+  }catch(error){panel.innerHTML=`<div class="diag-head"><strong>진단 자체 실패</strong><button id="diagClose" class="ghost small">닫기</button></div><p>${escapeHtml(error.message||'Unknown error')}</p>`;$('diagClose')?.addEventListener('click',()=>panel.classList.add('hidden'));}
+  finally{btn.disabled=false;btn.textContent='진단';}
 }
 
 function setWorkflow(name){
@@ -51,6 +88,7 @@ function setWorkflow(name){
   document.querySelectorAll('.workflow-btn').forEach(b=>b.classList.toggle('active',b.dataset.workflow===name));
   localStorage.setItem('kpa.workflow',name);
 }
+
 document.querySelectorAll('.workflow-btn').forEach(b=>b.addEventListener('click',()=>setWorkflow(b.dataset.workflow)));
 
 function setSalesBusy(on){
@@ -73,34 +111,42 @@ async function runSales(){
   localStorage.setItem('kpa.sales.form',JSON.stringify({focus,count:String(count),mode}));
   state.salesData=null; $('salesResults').classList.add('hidden'); setSalesBusy(true);
   try{
-    if(!await checkHealth()) throw new Error('Groq API 실제 연결에 실패했습니다.');
-    setSalesProgress('1/2 해외 SaaS 후보를 찾고 있습니다.', '이 단계에서는 회사와 최근 확장 신호만 빠르게 찾습니다.');
-    const discovery=await requestJson('/api/discover-clients',{focus,count,mode},48000);
+    if(!await checkHealth()) throw new Error('Groq 인증에 실패했습니다. 우측 상단 진단을 실행하세요.');
+    setSalesProgress('1/2 해외 SaaS 후보를 찾고 있습니다.', 'Fast는 1회 웹검색으로 후보를 찾고, 실패 시에만 한 번 폴백합니다.');
+    const discovery=await requestJson('/api/discover-clients',{focus,count,mode},42000);
     const candidates=Array.isArray(discovery?.candidates)?discovery.candidates:[];
     if(!candidates.length) throw new Error('해외 SaaS 후보를 찾지 못했습니다.');
 
     state.salesData={
       offer:{name:'Korea Pipeline Pilot',promise:'한국팀을 채용하기 전에 한국 영업기회를 검증하는 저비용 Pilot',suggested_price_krw:390000},
       leads:[], strategy:{best_segment:discovery?.strategy?.best_segment||'',pitch:discovery?.strategy?.pitch||'',daily_action:'후보별 조사 완료 후 영업문을 검수하고 발송합니다.',next_action:'상위 후보부터 1차 아웃바운드를 시작합니다.'},
-      meta:{model:discovery?.meta?.model||'groq/compound',stage:'enrichment',failures:[]}
+      meta:{model:discovery?.meta?.model||'groq/compound-mini',stage:'enrichment',failures:[],discovery:discovery?.meta||{},rate_limited:false}
     };
 
     for(let i=0;i<candidates.length;i++){
       const c=candidates[i];
-      setSalesProgress(`2/2 ${i+1}/${candidates.length} · ${c.company} 조사 중`, '한국 고객 샘플 · 담당 역할 · 영업문을 회사별로 따로 생성합니다.');
+      if(i>0) await sleep(900);
+      setSalesProgress(`2/2 ${i+1}/${candidates.length} · ${c.company} 조사 중`, '회사별로 따로 조사하며 성공한 결과는 즉시 보존합니다.');
       try{
-        const enriched=await requestJson('/api/enrich-client',{candidate:c,mode},52000);
-        const lead={...(enriched?.lead||{}),rank:state.salesData.leads.length+1};
+        const enriched=await requestJson('/api/enrich-client',{candidate:c,mode},45000);
+        const lead={...(enriched?.lead||{}),rank:state.salesData.leads.length+1,_meta:enriched?.meta||{}};
         state.salesData.leads.push(lead);
         state.salesData.leads.sort((a,b)=>(b.fit_score||0)-(a.fit_score||0));
         state.salesData.leads.forEach((x,idx)=>x.rank=idx+1);
         state.salesData.meta.model=enriched?.meta?.model||state.salesData.meta.model;
         localStorage.setItem('kpa.sales.result',JSON.stringify(state.salesData));
         renderSales(true);
-      }catch(error){ state.salesData.meta.failures.push(`${c.company}: ${error.message}`); }
+      }catch(error){
+        state.salesData.meta.failures.push(`${c.company}: ${error.message}`);
+        if(error?.status===429){
+          state.salesData.meta.rate_limited=true;
+          state.salesData.strategy.next_action='Groq rate limit에 걸려 추가 조사를 멈췄습니다. 잠시 후 남은 후보를 다시 실행하세요.';
+          break;
+        }
+      }
     }
     if(!state.salesData.leads.length) throw new Error(`후보는 찾았지만 상세조사가 모두 실패했습니다. ${state.salesData.meta.failures.join(' | ')}`);
-    state.salesData.meta.stage='complete';
+    state.salesData.meta.stage=state.salesData.meta.rate_limited?'partial':'complete';
     localStorage.setItem('kpa.sales.result',JSON.stringify(state.salesData)); renderSales();
   }catch(e){state.salesData=null;salesError(e.message||'고객 발굴에 실패했습니다.');}
   finally{setSalesBusy(false);if(state.salesData?.leads?.length)$('salesResults').classList.remove('hidden');}
@@ -110,8 +156,8 @@ function renderSales(keepLoading=false){
   const d=state.salesData;if(!d)return;
   $('salesEmpty').classList.add('hidden'); $('salesError').classList.add('hidden'); $('salesResults').classList.remove('hidden'); if(!keepLoading)$('salesLoading').classList.add('hidden');
   $('salesCsv').disabled=!d.leads?.length; $('salesJson').disabled=!d.leads?.length;
-  const top=d.leads?.[0];
-  $('salesSummary').innerHTML=metric('OFFER',d.offer?.name||'Korea Pipeline Pilot')+metric('완료',`${d.leads?.length||0}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',d.meta?.model||'-');
+  const top=d.leads?.[0]; const stage=d.meta?.stage==='partial'?'부분 완료':`${d.leads?.length||0}개`;
+  $('salesSummary').innerHTML=metric('OFFER',d.offer?.name||'Korea Pipeline Pilot')+metric('완료',stage)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',d.meta?.model||'-');
   document.querySelectorAll('[data-sales-tab]').forEach(b=>b.classList.toggle('active',b.dataset.salesTab===state.salesTab)); renderSalesTab();
 }
 function sampleTargets(targets=[]){
@@ -126,8 +172,8 @@ function renderSalesTab(){
     root.innerHTML=`<div class="cards">${d.leads.map(l=>`<article class="message-card"><div class="top"><div><span class="rank">#${l.rank}</span><h3>${escapeHtml(l.company)}</h3></div><button class="copy sales-copy" data-rank="${l.rank}">영문 복사</button></div><p class="message-text">${escapeHtml(l.outreach_en)}</p><details><summary>한국어 뜻</summary><p class="message-text">${escapeHtml(l.outreach_ko)}</p></details></article>`).join('')}</div>`;
     root.querySelectorAll('.sales-copy').forEach(btn=>btn.addEventListener('click',async()=>{const l=d.leads.find(x=>x.rank===Number(btn.dataset.rank));await navigator.clipboard.writeText(l?.outreach_en||'');const old=btn.textContent;btn.textContent='복사됨';setTimeout(()=>btn.textContent=old,900)}));
   } else {
-    const s=d.strategy||{}; const failures=d.meta?.failures||[];
-    root.innerHTML=`<div class="cards"><article class="strategy-card money-card"><h3>무엇을 파나</h3><p>${escapeHtml(d.offer?.promise||'한국 영업기회를 빠르게 검증하는 Pipeline Pilot')}</p><strong>${Number(d.offer?.suggested_price_krw||390000).toLocaleString('ko-KR')}원 Pilot</strong></article><article class="strategy-card"><h3>먼저 노릴 고객군</h3><p>${escapeHtml(s.best_segment)}</p></article><article class="strategy-card"><h3>피치</h3><p>${escapeHtml(s.pitch)}</p></article><article class="strategy-card"><h3>오늘 할 일</h3><p>${escapeHtml(s.daily_action)}</p></article>${failures.length?`<article class="strategy-card"><h3>건너뛴 후보</h3><p>${escapeHtml(failures.join(' / '))}</p></article>`:''}</div>`;
+    const s=d.strategy||{}; const failures=d.meta?.failures||[]; const discovery=d.meta?.discovery||{};
+    root.innerHTML=`<div class="cards"><article class="strategy-card money-card"><h3>무엇을 파나</h3><p>${escapeHtml(d.offer?.promise||'한국 영업기회를 빠르게 검증하는 Pipeline Pilot')}</p><strong>${Number(d.offer?.suggested_price_krw||390000).toLocaleString('ko-KR')}원 Pilot</strong></article><article class="strategy-card"><h3>먼저 노릴 고객군</h3><p>${escapeHtml(s.best_segment)}</p></article><article class="strategy-card"><h3>다음 행동</h3><p>${escapeHtml(s.next_action)}</p></article><article class="strategy-card"><h3>실행 정보</h3><p>Discovery: ${escapeHtml(discovery.model||'-')} · ${escapeHtml(String(discovery.duration_ms||'-'))}ms · tool ${escapeHtml(String(discovery.tool_calls??'-'))}</p></article>${failures.length?`<article class="strategy-card"><h3>실패/건너뜀</h3><p>${escapeHtml(failures.join(' / '))}</p></article>`:''}</div>`;
   }
 }
 function exportSalesCsv(){const d=state.salesData;if(!d)return;const cols=['rank','company','url','country','category','fit_score','why_buy_our_service','why_now','source_urls','decision_maker_name','decision_maker_title','decision_maker_profile_url','recommended_role','contact_search_query','korea_opportunity','sample_korean_targets','outreach_en','outreach_ko','confidence','warning'];const rows=[cols.join(','),...d.leads.map(l=>cols.map(c=>c==='sample_korean_targets'?csvCell((l.sample_korean_targets||[]).map(t=>`${t.company}: ${t.reason}`)):csvCell(l[c])).join(','))];download(`korea-pilot-buyers-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'));}
@@ -139,7 +185,7 @@ function showDeliveryError(msg){$('loadingState').classList.add('hidden');$('emp
 async function runDelivery(){
   const clientUrl=$('clientUrl').value.trim();if(!clientUrl){showDeliveryError('고객 SaaS URL을 입력하세요.');return;}
   saveDeliveryForm();setDeliveryBusy(true); const payload={clientUrl,productHint:$('productHint').value,targetNotes:$('targetNotes').value,seeds:$('seeds').value,count:Number($('count').value),mode:$('mode').value};
-  try{if(!await checkHealth())throw new Error('Groq API 실제 연결에 실패했습니다.');const d=await requestJson('/api/analyze',payload,58000);state.deliveryData=d;state.deliveryTab='prospects';localStorage.setItem('kpa.delivery.result',JSON.stringify(d));renderDelivery();}
+  try{if(!await checkHealth())throw new Error('Groq 인증에 실패했습니다. 우측 상단 진단을 실행하세요.');const d=await requestJson('/api/analyze',payload,52000);state.deliveryData=d;state.deliveryTab='prospects';localStorage.setItem('kpa.delivery.result',JSON.stringify(d));renderDelivery();}
   catch(e){state.deliveryData=null;showDeliveryError(e.message||'분석에 실패했습니다.');}finally{setDeliveryBusy(false);if(state.deliveryData)$('results').classList.remove('hidden');}
 }
 function renderDelivery(){const d=state.deliveryData;if(!d)return;$('emptyState').classList.add('hidden');$('loadingState').classList.add('hidden');$('errorState').classList.add('hidden');$('results').classList.remove('hidden');$('exportCsv').disabled=false;$('exportJson').disabled=false;const top=d.prospects?.[0];$('summaryGrid').innerHTML=metric('CLIENT',d.client?.name||host(d.client?.url))+metric('PROSPECTS',`${d.prospects?.length||0}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',d.meta?.model||'-');document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.deliveryTab));renderDeliveryTab();}
@@ -148,10 +194,11 @@ function renderDeliveryTab(){
   if(state.deliveryTab==='prospects') root.innerHTML=`<div style="overflow:auto"><table class="prospect-table"><thead><tr><th>#</th><th>기업</th><th>점수</th><th>왜 적합한가</th><th>구매 신호</th><th>근거</th><th>신뢰</th></tr></thead><tbody>${(d.prospects||[]).map(p=>`<tr><td>${p.rank}</td><td class="company-cell"><strong>${escapeHtml(p.company)}</strong>${safeUrl(p.url)?`<a target="_blank" rel="noopener noreferrer" href="${escapeHtml(safeUrl(p.url))}">${escapeHtml(host(p.url))}</a>`:''}</td><td><span class="score">${p.fit_score}</span></td><td>${escapeHtml(p.why_fit)}</td><td>${escapeHtml(p.buying_signal)}${p.signal_date?`<br><small>${escapeHtml(p.signal_date)}</small>`:''}</td><td>${sourceLinks(p.source_urls)}</td><td><span class="confidence ${escapeHtml(p.confidence)}">${escapeHtml(p.confidence)}</span>${p.warning?`<div class="warning-text">${escapeHtml(p.warning)}</div>`:''}</td></tr>`).join('')}</tbody></table></div>`;
   else if(state.deliveryTab==='contacts') root.innerHTML=`<div class="cards">${(d.prospects||[]).map(p=>`<article class="contact-card"><div class="top"><div><span class="rank">#${p.rank} · ${escapeHtml(p.company)}</span><h3>${escapeHtml(p.contact_name||p.recommended_role||'담당 직책 확인 필요')}</h3><span class="pill">${escapeHtml(p.contact_name?(p.contact_title||'공개 프로필'):'추천 직책')}</span></div>${safeUrl(p.contact_profile_url)?`<a class="ghost small" href="${escapeHtml(safeUrl(p.contact_profile_url))}" target="_blank" rel="noopener noreferrer">프로필</a>`:''}</div><p><b>검색 쿼리:</b> ${escapeHtml(p.contact_search_query||`${p.company} ${p.recommended_role}`)}</p></article>`).join('')}</div>`;
   else if(state.deliveryTab==='messages'){root.innerHTML=`<div class="cards">${(d.prospects||[]).map(p=>`<article class="message-card"><div class="top"><div><span class="rank">#${p.rank}</span><h3>${escapeHtml(p.company)}</h3></div><button class="copy delivery-copy" data-rank="${p.rank}">한국어 복사</button></div><p><b>접근 포인트:</b> ${escapeHtml(p.sales_angle)}</p><p class="message-text">${escapeHtml(p.message_ko)}</p><p class="message-text">${escapeHtml(p.message_en)}</p></article>`).join('')}</div>`;root.querySelectorAll('.delivery-copy').forEach(btn=>btn.addEventListener('click',async()=>{const p=d.prospects.find(x=>x.rank===Number(btn.dataset.rank));await navigator.clipboard.writeText(p?.message_ko||'');const old=btn.textContent;btn.textContent='복사됨';setTimeout(()=>btn.textContent=old,900)}));}
-  else {const s=d.strategy||{};root.innerHTML=`<div class="cards"><article class="strategy-card"><h3>ICP</h3><p>${escapeHtml(d.icp?.summary)}</p><div class="source-links">${(d.icp?.industries||[]).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join('')}</div></article><article class="strategy-card"><h3>첫 공략 세그먼트</h3><p>${escapeHtml(s.first_segment)}</p></article><article class="strategy-card"><h3>핵심 제안</h3><p>${escapeHtml(s.core_offer)}</p></article><article class="strategy-card"><h3>아웃바운드 순서</h3><div class="sequence">${(s.outreach_sequence||[]).map((x,i)=>`<div><b>${i+1}</b><span>${escapeHtml(x)}</span></div>`).join('')}</div></article><article class="strategy-card"><h3>다음 행동</h3><p>${escapeHtml(s.next_action)}</p></article></div>`;}
+  else {const s=d.strategy||{};root.innerHTML=`<div class="cards"><article class="strategy-card"><h3>ICP</h3><p>${escapeHtml(d.icp?.summary)}</p><div class="source-links">${(d.icp?.industries||[]).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join('')}</div></article><article class="strategy-card"><h3>첫 공략 세그먼트</h3><p>${escapeHtml(s.first_segment)}</p></article><article class="strategy-card"><h3>핵심 제안</h3><p>${escapeHtml(s.core_offer)}</p></article><article class="strategy-card"><h3>다음 행동</h3><p>${escapeHtml(s.next_action)}</p></article><article class="strategy-card"><h3>실행 정보</h3><p>${escapeHtml(d.meta?.model||'-')} · ${escapeHtml(String(d.meta?.duration_ms||'-'))}ms · tool ${escapeHtml(String(d.meta?.tool_calls??'-'))}</p></article></div>`;}
 }
 function exportDeliveryCsv(){const d=state.deliveryData;if(!d)return;const cols=['rank','company','url','industry','fit_score','why_fit','buying_signal','signal_date','source_urls','contact_name','contact_title','contact_profile_url','recommended_role','contact_search_query','sales_angle','message_ko','message_en','confidence','warning'];const rows=[cols.join(','),...(d.prospects||[]).map(p=>cols.map(c=>csvCell(p[c])).join(','))];download(`korea-prospect-pack-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'));}
 
+$('diagBtn').addEventListener('click',runDiagnostics);
 $('salesRunBtn').addEventListener('click',runSales);$('salesCsv').addEventListener('click',exportSalesCsv);$('salesJson').addEventListener('click',()=>state.salesData&&download(`korea-pilot-buyers-${Date.now()}.json`,'application/json',JSON.stringify(state.salesData,null,2)));
 $('salesDemo').addEventListener('click',()=>{$('salesFocus').value='Seed~Series B B2B SaaS/AI. 최근 투자, APAC·일본·싱가포르 확장, 파트너십/세일즈 채용 신호가 있고 아직 한국 영업조직이 강하지 않은 회사 우선. 한국 기업에 명확한 B2B 사용처가 있어야 함.';$('salesCount').value='3';$('salesMode').value='fast';localStorage.setItem('kpa.sales.form',JSON.stringify({focus:$('salesFocus').value,count:'3',mode:'fast'}));});
 document.querySelectorAll('[data-sales-tab]').forEach(b=>b.addEventListener('click',()=>{state.salesTab=b.dataset.salesTab;renderSales();}));
