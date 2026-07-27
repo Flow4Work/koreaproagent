@@ -9,12 +9,40 @@ function sourceLinks(urls=[]){return `<div class="source-links">${urls.map((u,i)
 function csvCell(v){const s=Array.isArray(v)?v.join(' | '):String(v??'');return `"${s.replace(/"/g,'""')}"`;}
 function download(name,type,content){const blob=new Blob([content],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 
+async function readJsonResponse(response) {
+  const text = await response.text();
+  let data = null;
+  try { data = text ? JSON.parse(text) : {}; }
+  catch {
+    throw new Error(`API가 JSON을 반환하지 않았습니다 (HTTP ${response.status}). Vercel 배포/함수 로그를 확인하세요.`);
+  }
+  if (!response.ok) {
+    const message = data?.error || data?.message || `HTTP ${response.status}`;
+    const hint = data?.hint ? ` · ${data.hint}` : '';
+    throw new Error(`${message}${hint}`);
+  }
+  return data;
+}
+
+async function getHealth() {
+  const response = await fetch(`/api/health?t=${Date.now()}`, { cache: 'no-store' });
+  return readJsonResponse(response);
+}
+
 async function checkHealth(){
   try{
-    const r=await fetch('/api/health'); const d=await r.json();
-    $('apiStatus').className=`status ${d.groqConfigured?'ok':'bad'}`;
-    $('apiStatus').innerHTML=`<span class="dot"></span><span>${d.groqConfigured?'Groq 연결됨':'API 키 필요'}</span>`;
-  }catch{$('apiStatus').className='status bad';$('apiStatus').innerHTML='<span class="dot"></span><span>API 확인 실패</span>'}
+    const d = await getHealth();
+    const connected = Boolean(d.groqConnected);
+    $('apiStatus').className=`status ${connected?'ok':'bad'}`;
+    $('apiStatus').title = connected ? `Groq API 정상 · ${d.model || ''}` : (d.error || 'Groq API 연결 실패');
+    $('apiStatus').innerHTML=`<span class="dot"></span><span>${connected?'Groq 실제 연결됨':'Groq 연결 실패'}</span>`;
+    return connected;
+  }catch(error){
+    $('apiStatus').className='status bad';
+    $('apiStatus').title=error.message || 'API 확인 실패';
+    $('apiStatus').innerHTML='<span class="dot"></span><span>API 확인 실패</span>';
+    return false;
+  }
 }
 
 function setWorkflow(name){
@@ -27,12 +55,9 @@ function setWorkflow(name){
 
 document.querySelectorAll('.workflow-btn').forEach(b=>b.addEventListener('click',()=>setWorkflow(b.dataset.workflow)));
 
-// -------------------------
-// Agent 01: Find our clients
-// -------------------------
 function setSalesBusy(on){
   $('salesRunBtn').disabled=on;
-  $('salesRunBtn').querySelector('span').textContent=on?'구매후보 조사 중':'돈 될 고객 자동 발굴';
+  $('salesRunBtn').querySelector('span').textContent=on?'웹을 조사하는 중…':'돈 될 고객 자동 발굴';
   $('salesEmpty').classList.toggle('hidden',on||!!state.salesData);
   $('salesLoading').classList.toggle('hidden',!on);
   $('salesError').classList.add('hidden');
@@ -45,11 +70,17 @@ function salesError(msg){
 }
 
 async function runSales(){
-  localStorage.setItem('kpa.sales.form',JSON.stringify({focus:$('salesFocus').value,count:$('salesCount').value,mode:$('salesMode').value}));
+  const focus=$('salesFocus').value;
+  const count=Number($('salesCount').value);
+  const mode=$('salesMode').value;
+  localStorage.setItem('kpa.sales.form',JSON.stringify({focus,count:String(count),mode}));
   setSalesBusy(true);
   try{
-    const r=await fetch('/api/find-clients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({focus:$('salesFocus').value,count:Number($('salesCount').value),mode:$('salesMode').value})});
-    const d=await r.json(); if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);
+    const healthy = await checkHealth();
+    if(!healthy) throw new Error('Groq API 실제 연결에 실패했습니다. 우측 상단 상태에 마우스를 올려 원인을 확인하세요.');
+    const r=await fetch('/api/find-clients',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({focus,count,mode}),cache:'no-store'});
+    const d=await readJsonResponse(r);
+    if(!Array.isArray(d?.leads)||!d.leads.length) throw new Error('검색은 끝났지만 사용할 수 있는 고객 후보가 0개입니다. Fast + 3개로 다시 시도하세요.');
     state.salesData=d; state.salesTab='leads'; localStorage.setItem('kpa.sales.result',JSON.stringify(d)); renderSales();
   }catch(e){state.salesData=null;salesError(e.message||'고객 발굴에 실패했습니다.');}
   finally{setSalesBusy(false);if(state.salesData)$('salesResults').classList.remove('hidden');}
@@ -60,7 +91,8 @@ function renderSales(){
   $('salesEmpty').classList.add('hidden');$('salesLoading').classList.add('hidden');$('salesError').classList.add('hidden');$('salesResults').classList.remove('hidden');
   $('salesCsv').disabled=false;$('salesJson').disabled=false;
   const top=d.leads?.[0];
-  $('salesSummary').innerHTML=metric('OFFER',d.offer?.name||'Korea Pipeline Pilot')+metric('BUYER LEADS',`${d.leads?.length||0}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('PRICE',`${Number(d.offer?.suggested_price_krw||390000).toLocaleString('ko-KR')}원`);
+  const modelLabel=d.meta?.fallback_used?`${d.meta.model} · fallback`:d.meta?.model;
+  $('salesSummary').innerHTML=metric('OFFER',d.offer?.name||'Korea Pipeline Pilot')+metric('BUYER LEADS',`${d.leads?.length||0}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',modelLabel||'-');
   document.querySelectorAll('[data-sales-tab]').forEach(b=>b.classList.toggle('active',b.dataset.salesTab===state.salesTab));
   renderSalesTab();
 }
@@ -90,9 +122,6 @@ function exportSalesCsv(){
   download(`korea-pilot-buyers-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'));
 }
 
-// -------------------------
-// Agent 02: Delivery
-// -------------------------
 const deliveryFields=['clientUrl','productHint','targetNotes','seeds','count','mode'];
 function saveDeliveryForm(){const v={};deliveryFields.forEach(id=>v[id]=$(id).value);localStorage.setItem('kpa.delivery.form',JSON.stringify(v));}
 function setDeliveryBusy(on){$('runBtn').disabled=on;$('runBtn').querySelector('span').textContent=on?'Korea Pipeline 생성 중':'Korea Pipeline 생성';$('emptyState').classList.toggle('hidden',on||!!state.deliveryData);$('loadingState').classList.toggle('hidden',!on);$('errorState').classList.add('hidden');if(on)$('results').classList.add('hidden');}
@@ -103,8 +132,9 @@ async function runDelivery(){
   saveDeliveryForm();setDeliveryBusy(true);
   const payload={clientUrl,productHint:$('productHint').value,targetNotes:$('targetNotes').value,seeds:$('seeds').value,count:Number($('count').value),mode:$('mode').value};
   try{
-    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
-    const d=await r.json();if(!r.ok)throw new Error(d.error||`HTTP ${r.status}`);
+    const healthy=await checkHealth();if(!healthy)throw new Error('Groq API 실제 연결에 실패했습니다.');
+    const r=await fetch('/api/analyze',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),cache:'no-store'});
+    const d=await readJsonResponse(r);
     state.deliveryData=d;state.deliveryTab='prospects';localStorage.setItem('kpa.delivery.result',JSON.stringify(d));renderDelivery();
   }catch(e){state.deliveryData=null;showDeliveryError(e.message||'분석에 실패했습니다.');}
   finally{setDeliveryBusy(false);if(state.deliveryData)$('results').classList.remove('hidden');}
@@ -113,37 +143,35 @@ async function runDelivery(){
 function renderDelivery(){
   const d=state.deliveryData;if(!d)return;
   $('emptyState').classList.add('hidden');$('loadingState').classList.add('hidden');$('errorState').classList.add('hidden');$('results').classList.remove('hidden');$('exportCsv').disabled=false;$('exportJson').disabled=false;
-  const top=d.prospects?.[0];$('summaryGrid').innerHTML=metric('CLIENT',d.client?.name||host(d.client?.url))+metric('PROSPECTS',`${d.prospects.length}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',d.meta?.model||'-');
+  const top=d.prospects?.[0];$('summaryGrid').innerHTML=metric('CLIENT',d.client?.name||host(d.client?.url))+metric('PROSPECTS',`${d.prospects?.length||0}개`)+metric('TOP SCORE',top?`${top.fit_score}/100`:'-')+metric('MODEL',d.meta?.model||'-');
   document.querySelectorAll('[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.deliveryTab));renderDeliveryTab();
 }
 
 function renderDeliveryTab(){
   const d=state.deliveryData;if(!d)return;const root=$('tabContent');
   if(state.deliveryTab==='prospects'){
-    root.innerHTML=`<div style="overflow:auto"><table class="prospect-table"><thead><tr><th>#</th><th>기업</th><th>점수</th><th>왜 적합한가</th><th>구매 신호</th><th>근거</th><th>신뢰</th></tr></thead><tbody>${d.prospects.map(p=>`<tr><td>${p.rank}</td><td class="company-cell"><strong>${escapeHtml(p.company)}</strong>${safeUrl(p.url)?`<a target="_blank" rel="noopener noreferrer" href="${escapeHtml(safeUrl(p.url))}">${escapeHtml(host(p.url))}</a>`:''}</td><td><span class="score">${p.fit_score}</span></td><td>${escapeHtml(p.why_fit)}</td><td>${escapeHtml(p.buying_signal)}${p.signal_date?`<br><small>${escapeHtml(p.signal_date)}</small>`:''}</td><td>${sourceLinks(p.source_urls)}</td><td><span class="confidence ${escapeHtml(p.confidence)}">${escapeHtml(p.confidence)}</span>${p.warning?`<div class="warning-text">${escapeHtml(p.warning)}</div>`:''}</td></tr>`).join('')}</tbody></table></div>`;
+    root.innerHTML=`<div style="overflow:auto"><table class="prospect-table"><thead><tr><th>#</th><th>기업</th><th>점수</th><th>왜 적합한가</th><th>구매 신호</th><th>근거</th><th>신뢰</th></tr></thead><tbody>${(d.prospects||[]).map(p=>`<tr><td>${p.rank}</td><td class="company-cell"><strong>${escapeHtml(p.company)}</strong>${safeUrl(p.url)?`<a target="_blank" rel="noopener noreferrer" href="${escapeHtml(safeUrl(p.url))}">${escapeHtml(host(p.url))}</a>`:''}</td><td><span class="score">${p.fit_score}</span></td><td>${escapeHtml(p.why_fit)}</td><td>${escapeHtml(p.buying_signal)}${p.signal_date?`<br><small>${escapeHtml(p.signal_date)}</small>`:''}</td><td>${sourceLinks(p.source_urls)}</td><td><span class="confidence ${escapeHtml(p.confidence)}">${escapeHtml(p.confidence)}</span>${p.warning?`<div class="warning-text">${escapeHtml(p.warning)}</div>`:''}</td></tr>`).join('')}</tbody></table></div>`;
   } else if(state.deliveryTab==='contacts'){
-    root.innerHTML=`<div class="cards">${d.prospects.map(p=>`<article class="contact-card"><div class="top"><div><span class="rank">#${p.rank} · ${escapeHtml(p.company)}</span><h3>${escapeHtml(p.contact_name||p.recommended_role||'담당 직책 확인 필요')}</h3><span class="pill">${escapeHtml(p.contact_name?(p.contact_title||'공개 프로필'):'추천 직책')}</span></div>${safeUrl(p.contact_profile_url)?`<a class="ghost small" href="${escapeHtml(safeUrl(p.contact_profile_url))}" target="_blank" rel="noopener noreferrer">프로필</a>`:''}</div><p><b>검색 쿼리:</b> ${escapeHtml(p.contact_search_query||`${p.company} ${p.recommended_role}`)}</p></article>`).join('')}</div>`;
+    root.innerHTML=`<div class="cards">${(d.prospects||[]).map(p=>`<article class="contact-card"><div class="top"><div><span class="rank">#${p.rank} · ${escapeHtml(p.company)}</span><h3>${escapeHtml(p.contact_name||p.recommended_role||'담당 직책 확인 필요')}</h3><span class="pill">${escapeHtml(p.contact_name?(p.contact_title||'공개 프로필'):'추천 직책')}</span></div>${safeUrl(p.contact_profile_url)?`<a class="ghost small" href="${escapeHtml(safeUrl(p.contact_profile_url))}" target="_blank" rel="noopener noreferrer">프로필</a>`:''}</div><p><b>검색 쿼리:</b> ${escapeHtml(p.contact_search_query||`${p.company} ${p.recommended_role}`)}</p></article>`).join('')}</div>`;
   } else if(state.deliveryTab==='messages'){
-    root.innerHTML=`<div class="cards">${d.prospects.map(p=>`<article class="message-card"><div class="top"><div><span class="rank">#${p.rank}</span><h3>${escapeHtml(p.company)}</h3></div><button class="copy delivery-copy" data-rank="${p.rank}">한국어 복사</button></div><p><b>접근 포인트:</b> ${escapeHtml(p.sales_angle)}</p><p class="message-text">${escapeHtml(p.message_ko)}</p><p class="message-text">${escapeHtml(p.message_en)}</p></article>`).join('')}</div>`;
+    root.innerHTML=`<div class="cards">${(d.prospects||[]).map(p=>`<article class="message-card"><div class="top"><div><span class="rank">#${p.rank}</span><h3>${escapeHtml(p.company)}</h3></div><button class="copy delivery-copy" data-rank="${p.rank}">한국어 복사</button></div><p><b>접근 포인트:</b> ${escapeHtml(p.sales_angle)}</p><p class="message-text">${escapeHtml(p.message_ko)}</p><p class="message-text">${escapeHtml(p.message_en)}</p></article>`).join('')}</div>`;
     root.querySelectorAll('.delivery-copy').forEach(btn=>btn.addEventListener('click',async()=>{const p=d.prospects.find(x=>x.rank===Number(btn.dataset.rank));await navigator.clipboard.writeText(p?.message_ko||'');const old=btn.textContent;btn.textContent='복사됨';setTimeout(()=>btn.textContent=old,900)}));
   } else {
     const s=d.strategy||{};root.innerHTML=`<div class="cards"><article class="strategy-card"><h3>ICP</h3><p>${escapeHtml(d.icp?.summary)}</p><div class="source-links">${(d.icp?.industries||[]).map(x=>`<span class="pill">${escapeHtml(x)}</span>`).join('')}</div></article><article class="strategy-card"><h3>첫 공략 세그먼트</h3><p>${escapeHtml(s.first_segment)}</p></article><article class="strategy-card"><h3>핵심 제안</h3><p>${escapeHtml(s.core_offer)}</p></article><article class="strategy-card"><h3>아웃바운드 순서</h3><div class="sequence">${(s.outreach_sequence||[]).map((x,i)=>`<div><b>${i+1}</b><span>${escapeHtml(x)}</span></div>`).join('')}</div></article><article class="strategy-card"><h3>다음 행동</h3><p>${escapeHtml(s.next_action)}</p></article></div>`;
   }
 }
 
-function exportDeliveryCsv(){const d=state.deliveryData;if(!d)return;const cols=['rank','company','url','industry','fit_score','why_fit','buying_signal','signal_date','source_urls','contact_name','contact_title','contact_profile_url','recommended_role','contact_search_query','sales_angle','message_ko','message_en','confidence','warning'];const rows=[cols.join(','),...d.prospects.map(p=>cols.map(c=>csvCell(p[c])).join(','))];download(`korea-prospect-pack-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'));}
+function exportDeliveryCsv(){const d=state.deliveryData;if(!d)return;const cols=['rank','company','url','industry','fit_score','why_fit','buying_signal','signal_date','source_urls','contact_name','contact_title','contact_profile_url','recommended_role','contact_search_query','sales_angle','message_ko','message_en','confidence','warning'];const rows=[cols.join(','),...(d.prospects||[]).map(p=>cols.map(c=>csvCell(p[c])).join(','))];download(`korea-prospect-pack-${Date.now()}.csv`,'text/csv;charset=utf-8','\ufeff'+rows.join('\n'));}
 
-// Events
 $('salesRunBtn').addEventListener('click',runSales);$('salesCsv').addEventListener('click',exportSalesCsv);$('salesJson').addEventListener('click',()=>state.salesData&&download(`korea-pilot-buyers-${Date.now()}.json`,'application/json',JSON.stringify(state.salesData,null,2)));
-$('salesDemo').addEventListener('click',()=>{$('salesFocus').value='Seed~Series B B2B SaaS/AI. 최근 투자, APAC·일본·싱가포르 확장, 파트너십/세일즈 채용 신호가 있고 아직 한국 영업조직이 강하지 않은 회사 우선. 한국 기업에 명확한 B2B 사용처가 있어야 함.';$('salesCount').value='5';localStorage.setItem('kpa.sales.form',JSON.stringify({focus:$('salesFocus').value,count:'5',mode:$('salesMode').value}));});
+$('salesDemo').addEventListener('click',()=>{$('salesFocus').value='Seed~Series B B2B SaaS/AI. 최근 투자, APAC·일본·싱가포르 확장, 파트너십/세일즈 채용 신호가 있고 아직 한국 영업조직이 강하지 않은 회사 우선. 한국 기업에 명확한 B2B 사용처가 있어야 함.';$('salesCount').value='3';$('salesMode').value='fast';localStorage.setItem('kpa.sales.form',JSON.stringify({focus:$('salesFocus').value,count:'3',mode:'fast'}));});
 document.querySelectorAll('[data-sales-tab]').forEach(b=>b.addEventListener('click',()=>{state.salesTab=b.dataset.salesTab;renderSales();}));
 
 $('runBtn').addEventListener('click',runDelivery);$('exportCsv').addEventListener('click',exportDeliveryCsv);$('exportJson').addEventListener('click',()=>state.deliveryData&&download(`korea-prospect-pack-${Date.now()}.json`,'application/json',JSON.stringify(state.deliveryData,null,2)));
-$('fillDemo').addEventListener('click',()=>{$('clientUrl').value='https://www.intercom.com';$('productHint').value='AI 기반 고객지원/헬프데스크 SaaS';$('targetNotes').value='한국 이커머스, 마켓플레이스, 앱 서비스 중 고객 문의량이 크거나 해외 확장 신호가 있는 기업 우선';$('count').value='5';saveDeliveryForm();});
+$('fillDemo').addEventListener('click',()=>{$('clientUrl').value='https://www.intercom.com';$('productHint').value='AI 기반 고객지원/헬프데스크 SaaS';$('targetNotes').value='한국 이커머스, 마켓플레이스, 앱 서비스 중 고객 문의량이 크거나 해외 확장 신호가 있는 기업 우선';$('count').value='5';$('mode').value='fast';saveDeliveryForm();});
 document.querySelectorAll('[data-tab]').forEach(b=>b.addEventListener('click',()=>{state.deliveryTab=b.dataset.tab;renderDelivery();}));
 deliveryFields.forEach(id=>$(id).addEventListener('change',saveDeliveryForm));
 
-// Restore
 try{const f=JSON.parse(localStorage.getItem('kpa.sales.form')||'{}');if(f.focus!=null)$('salesFocus').value=f.focus;if(f.count)$('salesCount').value=f.count;if(f.mode)$('salesMode').value=f.mode;}catch{}
 try{const f=JSON.parse(localStorage.getItem('kpa.delivery.form')||'{}');deliveryFields.forEach(id=>{if(f[id]!=null)$(id).value=f[id]});}catch{}
 try{const d=JSON.parse(localStorage.getItem('kpa.sales.result')||'null');if(d?.leads?.length){state.salesData=d;renderSales();}}catch{}
