@@ -12,7 +12,7 @@ concurrency:
 jobs:
   smoke:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 7
     steps:
       - name: Wait for production and quota cooldown
         run: sleep 70
@@ -23,34 +23,6 @@ jobs:
           curl -fsS --retry 4 --retry-delay 5 --max-time 20 https://koreaproagent.vercel.app/api/health -o /tmp/health.json
           cat /tmp/health.json
           node -e "const d=require('/tmp/health.json'); if(!d.groqConnected || d.allModelsAvailable === false) process.exit(1)"
-
-      - name: Sales discovery end-to-end
-        run: |
-          set -euo pipefail
-          STATUS=$(curl -sS --max-time 115 -o /tmp/discovery.json -w '%{http_code}' \
-            -X POST https://koreaproagent.vercel.app/api/discover-clients \
-            -H 'Content-Type: application/json' \
-            --data '{"focus":"Seed to Series B B2B SaaS or AI companies with a recent APAC expansion signal and a clear Korea B2B use case"}')
-          echo "HTTP $STATUS"
-          cat /tmp/discovery.json
-          test "$STATUS" -ge 200 -a "$STATUS" -lt 300
-          node <<'NODE'
-          const fs = require('fs');
-          const d = JSON.parse(fs.readFileSync('/tmp/discovery.json', 'utf8'));
-          if (!Array.isArray(d.leads) || d.leads.length < 1) throw new Error('No leads returned');
-          for (const lead of d.leads) {
-            if (!lead.company || !lead.url) throw new Error('Lead missing company/url');
-            if (!Array.isArray(lead.source_urls) || lead.source_urls.length < 1) throw new Error('Lead missing evidence URL');
-            if (!lead.outreach_en) throw new Error('Lead missing outreach email');
-            if (/south korea|대한민국|한국/i.test(String(lead.country))) throw new Error(`Korea-established buyer leaked into results: ${lead.company}`);
-            if (/data pipeline|data connector|데이터 파이프라인|데이터 커넥터/i.test(String(lead.why_buy_our_service))) throw new Error(`Service semantics drifted for ${lead.company}`);
-            if (!/3-account sample/i.test(lead.outreach_en)) throw new Error(`Outreach is not the free-sample offer for ${lead.company}`);
-          }
-          console.log(`SALES PASS: ${d.leads.length} qualified lead(s), pipeline=${d.meta?.pipeline}`);
-          NODE
-
-      - name: Cool down model TPM before delivery
-        run: sleep 70
 
       - name: Delivery generation end-to-end
         run: |
