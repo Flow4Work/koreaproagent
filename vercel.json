@@ -13,10 +13,9 @@
     }
   ],
   "functions": {
-    "api/analyze.js": {"maxDuration": 60},
-    "api/find-clients.js": {"maxDuration": 60},
-    "api/discover-clients.js": {"maxDuration": 60},
-    "api/enrich-client.js": {"maxDuration": 60},
-    "api/diagnostics.js": {"maxDuration": 30}
+    "api/analyze.js": {"maxDuration": 120},
+    "api/discover-clients.js": {"maxDuration": 120},
+    "api/diagnostics.js": {"maxDuration": 30},
+    "api/health.js": {"maxDuration": 15}
   }
 }
