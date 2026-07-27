@@ -42,8 +42,11 @@ jobs:
             if (!lead.company || !lead.url) throw new Error('Lead missing company/url');
             if (!Array.isArray(lead.source_urls) || lead.source_urls.length < 1) throw new Error('Lead missing evidence URL');
             if (!lead.outreach_en) throw new Error('Lead missing outreach email');
+            if (/south korea|대한민국|한국/i.test(String(lead.country))) throw new Error(`Korea-established buyer leaked into results: ${lead.company}`);
+            if (/data pipeline|data connector|데이터 파이프라인|데이터 커넥터/i.test(String(lead.why_buy_our_service))) throw new Error(`Service semantics drifted for ${lead.company}`);
+            if (!/3-account sample/i.test(lead.outreach_en)) throw new Error(`Outreach is not the free-sample offer for ${lead.company}`);
           }
-          console.log(`SALES PASS: ${d.leads.length} lead(s), pipeline=${d.meta?.pipeline}`);
+          console.log(`SALES PASS: ${d.leads.length} qualified lead(s), pipeline=${d.meta?.pipeline}`);
           NODE
 
       - name: Cool down model TPM before delivery
