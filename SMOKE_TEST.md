@@ -2,4 +2,4 @@
 
 This branch exists only to trigger the production end-to-end smoke test against `koreaproagent.vercel.app`.
 
-Run: 20B browser search -> 120B strict structure verification.
+Run: sales + delivery full production E2E.
