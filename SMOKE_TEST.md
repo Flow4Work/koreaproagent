@@ -2,4 +2,4 @@
 
 This branch exists only to trigger the production end-to-end smoke test against `koreaproagent.vercel.app`.
 
-Run: raw `search_results` evidence verification.
+Run: real user flow — health check, then client discovery only.
