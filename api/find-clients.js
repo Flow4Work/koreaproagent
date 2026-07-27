@@ -12,14 +12,16 @@ function cleanText(value, max = 4000) {
 }
 
 function parseMaybeJson(text) {
-  if (!text) throw new Error("Empty model response");
+  if (!text) throw new Error("Groq returned an empty response");
   try { return JSON.parse(text); } catch {}
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   if (fenced) { try { return JSON.parse(fenced[1]); } catch {} }
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
-  if (first >= 0 && last > first) return JSON.parse(text.slice(first, last + 1));
-  throw new Error("Model did not return valid JSON");
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    try { return JSON.parse(text.slice(first, last + 1)); } catch {}
+  }
+  throw new Error("Groq research finished, but the result could not be parsed as JSON");
 }
 
 function cleanUrls(values) {
@@ -28,7 +30,11 @@ function cleanUrls(values) {
     : [];
 }
 
-function sanitize(data, requestedCount, model, mode) {
+function safeError(value = "") {
+  return String(value).replace(/gsk_[A-Za-z0-9_-]+/g, "[redacted]").slice(0, 500);
+}
+
+function sanitize(data, requestedCount, model, mode, diagnostics = {}) {
   const leads = Array.isArray(data?.leads) ? data.leads.slice(0, requestedCount) : [];
   return {
     generated_at: new Date().toISOString(),
@@ -72,73 +78,13 @@ function sanitize(data, requestedCount, model, mode) {
       daily_action: cleanText(data?.strategy?.daily_action, 600),
       next_action: cleanText(data?.strategy?.next_action, 600)
     },
-    meta: { model, mode, requested_count: requestedCount }
+    meta: { model, mode, requested_count: requestedCount, ...diagnostics }
   };
 }
 
-export async function POST(request) {
-  if (!process.env.GROQ_API_KEY) {
-    return Response.json({ error: "GROQ_API_KEY is not configured." }, { status: 503 });
-  }
-
-  let body = {};
-  try { body = await request.json(); } catch { return Response.json({ error: "Invalid JSON body." }, { status: 400 }); }
-
-  const count = clampInt(body.count, 3, 12, 5);
-  const mode = body.mode === "fast" ? "fast" : "deep";
-  const focus = cleanText(body.focus, 1600);
-  const model = mode === "fast" ? "groq/compound-mini" : (process.env.GROQ_MODEL || "groq/compound");
-
-  const prompt = `You are an evidence-first B2B sales prospecting agent. Your client is a Korean operator selling a productized service called Korea Pipeline Pilot.
-
-OUR OFFER
-We help overseas B2B SaaS and AI companies test South Korea without hiring a Korea team. We research their product, identify Korean companies likely to buy it, find relevant decision-maker roles or publicly verified people, identify current buying signals, and create personalized outreach. The initial pilot is intentionally easy to buy and can later become recurring Korea GTM operations.
-
-MISSION
-Find exactly ${count} overseas B2B SaaS or AI companies that are plausible buyers of this Korea market-entry / pipeline service RIGHT NOW. Do the discovery yourself using current web research. For each candidate, also produce a tiny free sample: up to 3 Korean companies that could plausibly buy that candidate's product. This free sample is the hook for our outbound.
-
-OPTIONAL FOCUS
-${focus || "Prefer small-to-mid-size B2B SaaS/AI companies, roughly startup through Series B, that show APAC/global expansion signals but do not appear to have a mature Korea sales operation."}
-
-IDEAL BUYER SIGNALS
-- recent funding or growth
-- APAC, Japan, Singapore, SEA or international expansion
-- hiring in sales, partnerships, growth, market expansion or regional roles
-- launched a product with clear Korean enterprise/SMB use cases
-- has customers in Asia but weak/no visible Korea presence
-- founder-led or compact GTM team where a 390,000 KRW pilot is easy to test
-
-RESEARCH RULES
-1. Use current web research; do not invent companies, URLs, funding, hiring, expansion, people, or Korean targets.
-2. Every non-obvious claim needs source_urls. Prefer official company pages, careers, funding announcements, reputable news, public professional profiles, and official Korean company pages.
-3. Avoid huge companies that obviously already have a mature Korea operation unless there is a specific unmet Korea GTM reason.
-4. A decision-maker name/profile may be filled only when publicly verified. Otherwise leave it blank and provide recommended_role + contact_search_query.
-5. Never invent or guess personal email addresses.
-6. The sample Korean targets must be product-specific; explain why each Korean target could plausibly need the overseas company's product.
-7. Outreach must mention one verified trigger and the fact that we already found a few Korea-fit accounts. Keep it short and low-pressure. Do not claim a guaranteed sale.
-8. Fit score: 35 Korea-market fit + 30 current expansion/buying trigger + 20 accessibility of buyer + 15 evidence quality.
-9. Prefer quality over fame. Lower confidence or add warning when evidence is weak.
-
-OUTPUT
-Return ONLY valid JSON with this exact shape:
-{
-  "offer":{"name":"Korea Pipeline Pilot","promise":"","suggested_price_krw":390000},
-  "leads":[
-    {
-      "company":"","url":"","country":"","category":"","fit_score":0,
-      "why_buy_our_service":"","why_now":"","source_urls":[],
-      "decision_maker_name":"","decision_maker_title":"","decision_maker_profile_url":"",
-      "recommended_role":"","contact_search_query":"",
-      "korea_opportunity":"",
-      "sample_korean_targets":[{"company":"","url":"","reason":"","source_urls":[]}],
-      "outreach_en":"","outreach_ko":"","confidence":"high|medium|low","warning":""
-    }
-  ],
-  "strategy":{"best_segment":"","pitch":"","daily_action":"","next_action":""}
-}`;
-
+async function callGroq({ model, prompt, timeoutMs, deep }) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), mode === "fast" ? 25000 : 55000);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(GROQ_URL, {
@@ -151,11 +97,17 @@ Return ONLY valid JSON with this exact shape:
       body: JSON.stringify({
         model,
         messages: [
-          { role: "system", content: "Act as a rigorous outbound researcher. Use live web research. Return strict JSON only." },
+          { role: "system", content: "You are a rigorous B2B prospecting researcher. Use current web evidence. Never invent facts. Return strict JSON only." },
           { role: "user", content: prompt }
         ],
-        temperature: 0.15,
-        response_format: { type: "json_object" }
+        temperature: 0.1,
+        response_format: { type: "json_object" },
+        citation_options: "disabled",
+        compound_custom: {
+          tools: {
+            enabled_tools: deep ? ["web_search", "visit_website"] : ["web_search"]
+          }
+        }
       }),
       signal: controller.signal
     });
@@ -164,19 +116,76 @@ Return ONLY valid JSON with this exact shape:
     if (!response.ok) {
       let detail = raw;
       try { detail = JSON.parse(raw)?.error?.message || raw; } catch {}
-      return Response.json({ error: `Groq request failed: ${detail}` }, { status: response.status });
+      const error = new Error(`Groq HTTP ${response.status}: ${safeError(detail)}`);
+      error.status = response.status;
+      throw error;
     }
 
     const payload = JSON.parse(raw);
-    const content = payload?.choices?.[0]?.message?.content;
-    const result = sanitize(parseMaybeJson(content), count, model, mode);
-    result.meta.returned_count = result.leads.length;
-    result.meta.usage = payload?.usage || null;
-    return Response.json(result);
+    const message = payload?.choices?.[0]?.message;
+    const parsed = parseMaybeJson(message?.content);
+    const toolCalls = Array.isArray(message?.executed_tools) ? message.executed_tools.length : 0;
+    return { parsed, payload, toolCalls };
   } catch (error) {
-    const message = error?.name === "AbortError" ? "Client discovery timed out. Try Fast mode or fewer companies." : (error?.message || "Unknown error");
-    return Response.json({ error: message }, { status: 500 });
+    if (error?.name === "AbortError") {
+      const timeoutError = new Error(`Groq research timed out after ${Math.round(timeoutMs / 1000)}s`);
+      timeoutError.code = "TIMEOUT";
+      throw timeoutError;
+    }
+    throw error;
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timer);
   }
+}
+
+export async function POST(request) {
+  if (!process.env.GROQ_API_KEY) {
+    return Response.json({ error: "GROQ_API_KEY is missing in Vercel Environment Variables." }, { status: 503 });
+  }
+
+  let body = {};
+  try { body = await request.json(); } catch { return Response.json({ error: "Invalid request body." }, { status: 400 }); }
+
+  const count = clampInt(body.count, 3, 8, 3);
+  const mode = body.mode === "deep" ? "deep" : "fast";
+  const focus = cleanText(body.focus, 1600);
+  const preferredModel = mode === "deep" ? (process.env.GROQ_MODEL || "groq/compound") : "groq/compound-mini";
+
+  const prompt = `MISSION\nFind ${count} overseas B2B SaaS or AI companies that are good buyers RIGHT NOW for a Korea market-entry sales pilot.\n\nOUR OFFER\nKorea Pipeline Pilot: before the company hires a Korea team, we identify Korean companies likely to buy its product, explain why now, identify the relevant buyer role or a publicly verified person, and prepare personalized outreach. Initial pilot price: KRW 390,000.\n\nBUYER PROFILE\n${focus || "Seed through Series B B2B SaaS/AI. Prefer recent funding, APAC/Japan/Singapore/SEA expansion, international sales or partnership hiring, clear Korean B2B use cases, and weak/no mature Korea sales operation."}\n\nRESEARCH RULES\n1. Search the current web. Do not rely on memory for recent facts.\n2. Return real overseas companies with official URLs. Avoid giant companies with mature Korea teams.\n3. For each lead, find at least one concrete current trigger when possible: funding, APAC expansion, regional hiring, partnership, product launch, or international growth.\n4. Put evidence URLs in source_urls. Never invent URLs, funding, hiring, people, or dates.\n5. Decision-maker names/profile URLs only when publicly verified; otherwise leave them blank and return recommended_role + contact_search_query. Never guess emails.\n6. For every overseas lead, give 1-3 real Korean companies that plausibly fit that product. Use official URLs and a short reason. These are the free sample hook.\n7. Write a brief English outreach message using one verified trigger and saying we already mapped a few Korea-fit accounts. No hype and no guaranteed results.\n8. Score: 35 Korea fit + 30 current trigger + 20 buyer accessibility + 15 evidence quality.\n\nOUTPUT\nReturn ONLY one valid JSON object with this structure:\n{\n  "offer":{"name":"Korea Pipeline Pilot","promise":"","suggested_price_krw":390000},\n  "leads":[{\n    "company":"","url":"","country":"","category":"","fit_score":0,\n    "why_buy_our_service":"","why_now":"","source_urls":[],\n    "decision_maker_name":"","decision_maker_title":"","decision_maker_profile_url":"",\n    "recommended_role":"","contact_search_query":"",\n    "korea_opportunity":"",\n    "sample_korean_targets":[{"company":"","url":"","reason":"","source_urls":[]}],\n    "outreach_en":"","outreach_ko":"","confidence":"high|medium|low","warning":""\n  }],\n  "strategy":{"best_segment":"","pitch":"","daily_action":"","next_action":""}\n}`;
+
+  const attempts = mode === "deep"
+    ? [
+        { model: preferredModel, timeoutMs: 34000, deep: true },
+        { model: "groq/compound-mini", timeoutMs: 16000, deep: false }
+      ]
+    : [
+        { model: "groq/compound-mini", timeoutMs: 24000, deep: false },
+        { model: "groq/compound", timeoutMs: 24000, deep: true }
+      ];
+
+  const failures = [];
+
+  for (let i = 0; i < attempts.length; i++) {
+    const attempt = attempts[i];
+    try {
+      const { parsed, payload, toolCalls } = await callGroq({ ...attempt, prompt });
+      const result = sanitize(parsed, count, attempt.model, mode, {
+        returned_count: Array.isArray(parsed?.leads) ? parsed.leads.length : 0,
+        tool_calls: toolCalls,
+        fallback_used: i > 0,
+        usage: payload?.usage || null
+      });
+
+      if (!result.leads.length) throw new Error("Research returned zero usable buyer leads");
+      result.meta.returned_count = result.leads.length;
+      return Response.json(result, { headers: { "Cache-Control": "no-store" } });
+    } catch (error) {
+      failures.push(safeError(error?.message || "Unknown Groq error"));
+    }
+  }
+
+  return Response.json({
+    error: `Client discovery failed after automatic retry. ${failures.join(" | ")}`,
+    hint: "Try 3 candidates in Fast mode. If this persists, verify the Groq key and rate limits in Groq Console."
+  }, { status: 502, headers: { "Cache-Control": "no-store" } });
 }
