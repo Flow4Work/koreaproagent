@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/workflow.css?v=20260727-8" />
+  <link rel="stylesheet" href="/styles.css?v=20260727-9" />
+  <link rel="stylesheet" href="/workflow.css?v=20260727-9" />
 </head>
 <body>
   <div class="shell">
@@ -24,34 +24,33 @@
 
     <main class="simple-main">
       <section class="simple-intro">
-        <h1>해외 고객 찾기 → 메일 보내기 → 답장 오면 납품</h1>
-        <p>지금 할 일은 한국 진출 전 단계의 해외 SaaS를 찾아 실제 담당자에게 첫 메일을 보내는 것입니다.</p>
+        <h1>해외 SaaS를 찾고, 담당자에게 샘플을 제안합니다.</h1>
+        <p>한국 진출 전 단계의 해외 회사를 검증해 보여주고, 바로 보낼 첫 메일까지 준비합니다.</p>
       </section>
 
       <nav class="workflow-switch" aria-label="작업 선택">
-        <button class="workflow-btn active" data-workflow="sales"><span>1</span> 첫 고객 찾기 <small>지금 할 일</small></button>
-        <button class="workflow-btn" data-workflow="delivery"><span>2</span> 계약 후 납품 <small>돈 받은 뒤</small></button>
+        <button class="workflow-btn active" data-workflow="sales"><span>1</span> 고객 찾기 <small>지금 할 일</small></button>
+        <button class="workflow-btn" data-workflow="delivery"><span>2</span> 계약 후 납품 <small>답장 온 뒤</small></button>
       </nav>
 
       <section class="workspace" id="salesWorkspace">
         <aside class="panel input-panel">
-          <div class="panel-head"><div><span class="step">1</span><h2>연락할 해외 SaaS 찾기</h2></div><button class="ghost small" id="salesDemo">추천 조건</button></div>
-          <label>찾을 회사 조건 <span>선택</span>
-            <textarea id="salesFocus" rows="5" placeholder="비워도 됩니다. 추천 조건을 눌러도 됩니다."></textarea>
+          <div class="panel-head"><div><span class="step">1</span><h2>누구에게 팔지 찾기</h2></div><button class="ghost small" id="salesDemo">추천 조건</button></div>
+          <label>원하는 고객군 <span>선택</span>
+            <textarea id="salesFocus" rows="5" placeholder="예: AI SaaS, CRM, 고객지원, 개발도구. 비워도 됩니다."></textarea>
           </label>
           <button class="primary" id="salesRunBtn"><span>검증된 해외 고객 찾기</span></button>
-          <p class="hint">Tavily로 후보를 검색하고 Groq로 정리한 뒤, 공식 홈페이지와 한국 현지 조직 존재 여부를 다시 확인합니다.</p>
+          <p class="hint">Tavily로 후보를 찾고, Groq가 선별한 뒤 공식 홈페이지와 한국 현지 조직 여부를 다시 검색합니다.</p>
         </aside>
 
-        <section class="panel result-panel">
-          <div class="result-head"><div><span class="step">결과</span><h2>연락할 회사</h2></div><div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV</button></div></div>
-          <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>아직 찾은 회사가 없습니다.</h3><p>왼쪽에서 검증된 해외 고객 찾기를 누르세요.</p></div>
-          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>후보를 찾고 다시 검증하고 있습니다.</h3><p>Tavily 검색 → Groq 정리 → 공식 URL/한국 조직 재검증 순서입니다.</p><div class="progress"><span></span></div></div>
+        <section class="panel result-panel sales-result-panel">
+          <div class="result-head"><div><span class="step">결과</span><h2>지금 연락할 회사</h2></div><div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV</button></div></div>
+          <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>아직 후보가 없습니다.</h3><p>왼쪽 버튼 한 번이면 검색부터 검증까지 진행합니다.</p></div>
+          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>실제로 연락할 만한 회사를 고르는 중입니다.</h3><p>후보 검색 → 공식 홈페이지 확인 → 한국 조직 확인 순서로 검증합니다.</p><div class="progress"><span></span></div></div>
           <div class="error-box hidden" id="salesError"></div>
           <div class="results hidden" id="salesResults">
-            <div class="next-box" id="salesNext"></div>
-            <div class="summary-grid compact-summary" id="salesSummary"></div>
-            <div class="tabs"><button class="tab active" data-sales-tab="leads">후보</button><button class="tab" data-sales-tab="messages">보낼 메일</button><button class="tab" data-sales-tab="strategy">다음 할 일</button></div>
+            <div class="action-banner" id="salesNext"></div>
+            <div class="sales-summary" id="salesSummary"></div>
             <div id="salesContent"></div>
           </div>
         </section>
@@ -59,11 +58,11 @@
 
       <section class="workspace hidden" id="deliveryWorkspace">
         <aside class="panel input-panel">
-          <div class="panel-head"><div><span class="step">2</span><h2>고객 납품 만들기</h2></div><button class="ghost small" id="fillDemo">예시 채우기</button></div>
-          <label>돈 받은 고객의 SaaS URL <b>*</b><input id="clientUrl" type="url" placeholder="https://example.com" autocomplete="url" /></label>
+          <div class="panel-head"><div><span class="step">2</span><h2>돈 받은 뒤 납품 만들기</h2></div><button class="ghost small" id="fillDemo">예시 채우기</button></div>
+          <label>고객 SaaS URL <b>*</b><input id="clientUrl" type="url" placeholder="https://example.com" autocomplete="url" /></label>
           <label>제품 설명 <span>선택</span><textarea id="productHint" rows="3" placeholder="예: AI 고객지원 자동화 SaaS"></textarea></label>
-          <label>한국 타깃 조건 <span>선택</span><textarea id="targetNotes" rows="3" placeholder="예: 한국 이커머스 중 CS 채용이 늘어난 회사"></textarea></label>
-          <label>참고할 한국 기업 <span>선택</span><textarea id="seeds" rows="3" placeholder="비워도 자동으로 찾습니다."></textarea></label>
+          <label>한국 타깃 조건 <span>선택</span><textarea id="targetNotes" rows="3" placeholder="예: 문의량이 많은 한국 이커머스"></textarea></label>
+          <label>참고할 한국 기업 <span>선택</span><textarea id="seeds" rows="3" placeholder="비워도 됩니다."></textarea></label>
           <button class="primary" id="runBtn"><span>한국 영업 후보 만들기</span></button>
         </aside>
 
@@ -77,7 +76,7 @@
       </section>
     </main>
   </div>
-  <script>if(localStorage.getItem('kpa.ui.version')!=='20260727-8'){['kpa.sales.result','kpa.delivery.result'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('kpa.ui.version','20260727-8');}</script>
-  <script src="/app.js?v=20260727-8" defer></script>
+  <script>if(localStorage.getItem('kpa.ui.version')!=='20260727-9'){['kpa.sales.result','kpa.delivery.result'].forEach(k=>localStorage.removeItem(k));localStorage.setItem('kpa.ui.version','20260727-9');}</script>
+  <script src="/app.js?v=20260727-9" defer></script>
 </body>
 </html>
