@@ -8,8 +8,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css" />
-  <link rel="stylesheet" href="/workflow.css" />
+  <link rel="stylesheet" href="/styles.css?v=20260727-3" />
+  <link rel="stylesheet" href="/workflow.css?v=20260727-3" />
 </head>
 <body>
   <div class="shell">
@@ -18,7 +18,7 @@
         <div class="logo">K</div>
         <div><strong>Korea Prospect Agent</strong><span>Find client → Sell pilot → Deliver pipeline</span></div>
       </div>
-      <div class="status" id="apiStatus"><span class="dot"></span><span>연결 확인 중</span></div>
+      <div class="status" id="apiStatus" title="Groq API 실제 연결 상태를 확인합니다"><span class="dot"></span><span>실제 API 확인 중</span></div>
     </header>
 
     <main>
@@ -49,17 +49,17 @@
             <textarea id="salesFocus" rows="5" placeholder="예: Seed~Series B B2B SaaS/AI, APAC 확장 신호가 있고 아직 한국 영업조직이 약한 회사"></textarea>
           </label>
           <div class="row two">
-            <label>후보 수<select id="salesCount"><option value="3">3개</option><option value="5" selected>5개</option><option value="8">8개</option></select></label>
-            <label>리서치 모드<select id="salesMode"><option value="fast">Fast</option><option value="deep" selected>Deep</option></select></label>
+            <label>후보 수<select id="salesCount"><option value="3" selected>3개</option><option value="5">5개</option><option value="8">8개</option></select></label>
+            <label>리서치 모드<select id="salesMode"><option value="fast" selected>Fast · 추천</option><option value="deep">Deep · 느림</option></select></label>
           </div>
           <button class="primary" id="salesRunBtn"><span>돈 될 고객 자동 발굴</span></button>
-          <p class="hint">각 해외 회사마다 한국 잠재고객 샘플 최대 3곳 + 영업문까지 자동 생성합니다.</p>
+          <p class="hint">처음에는 Fast + 3개가 가장 안정적입니다. 실패 시 자동으로 다른 Compound 모드로 한 번 재시도합니다.</p>
         </aside>
 
         <section class="panel result-panel">
           <div class="result-head"><div><span class="step">RESULT</span><h2>판매 후보</h2></div><div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV</button><button class="ghost small" id="salesJson" disabled>JSON</button></div></div>
           <div class="empty" id="salesEmpty"><div class="radar"><i></i><i></i><i></i><span></span></div><h3>버튼 하나로 우리가 연락할 해외 고객을 찾습니다.</h3><p>회사 → 지금 살 이유 → 한국 샘플 → 담당자 → 보낼 메시지 순으로 나옵니다.</p></div>
-          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>해외 SaaS 구매후보를 찾고 있습니다.</h3><p>확장 신호와 한국 시장 적합성을 조사하고 무료 샘플까지 만듭니다.</p><div class="progress"><span></span></div></div>
+          <div class="loading hidden" id="salesLoading"><div class="spinner"></div><h3>실제 웹에서 해외 SaaS 구매후보를 찾고 있습니다.</h3><p>확장 신호 → 한국 적합성 → 한국 고객 샘플 → 영업문 순으로 조사합니다. 잠시 기다려주세요.</p><div class="progress"><span></span></div></div>
           <div class="error-box hidden" id="salesError"></div>
           <div class="results hidden" id="salesResults"><div class="summary-grid" id="salesSummary"></div><div class="tabs"><button class="tab active" data-sales-tab="leads">고객 후보</button><button class="tab" data-sales-tab="messages">영업문</button><button class="tab" data-sales-tab="strategy">오늘 할 일</button></div><div id="salesContent"></div></div>
         </section>
@@ -73,7 +73,7 @@
           <label>제품 설명 <span>선택</span><textarea id="productHint" rows="3" placeholder="예: AI 고객지원 자동화 SaaS"></textarea></label>
           <label>한국 타깃 조건 <span>선택</span><textarea id="targetNotes" rows="3" placeholder="예: 직원 50명 이상, 최근 해외 확장/CS 채용 기업 우선"></textarea></label>
           <label>시드 기업 <span>선택</span><textarea id="seeds" rows="3" placeholder="비워도 Agent가 직접 찾습니다."></textarea></label>
-          <div class="row two"><label>잠재고객 수<select id="count"><option value="5">5개</option><option value="8" selected>8개</option><option value="10">10개</option><option value="15">15개</option></select></label><label>리서치 모드<select id="mode"><option value="fast">Fast</option><option value="deep" selected>Deep</option></select></label></div>
+          <div class="row two"><label>잠재고객 수<select id="count"><option value="5" selected>5개</option><option value="8">8개</option><option value="10">10개</option><option value="15">15개</option></select></label><label>리서치 모드<select id="mode"><option value="fast" selected>Fast · 추천</option><option value="deep">Deep · 느림</option></select></label></div>
           <button class="primary" id="runBtn"><span>Korea Pipeline 생성</span></button>
           <p class="hint">공개 출처가 없는 사람 이름·이메일은 만들지 않습니다.</p>
         </aside>
@@ -90,6 +90,6 @@
 
     <footer>Find client → sell the pilot → deliver Korea pipeline · Verify before outreach</footer>
   </div>
-  <script src="/app.js" defer></script>
+  <script src="/app.js?v=20260727-3" defer></script>
 </body>
 </html>
