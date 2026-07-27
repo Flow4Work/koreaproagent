@@ -53,13 +53,20 @@ export async function POST(request) {
   try { body = await request.json(); } catch { return Response.json({ error: "Invalid request body." }, { status: 400 }); }
   const count = Math.max(3, Math.min(5, Number.parseInt(body.count, 10) || 3));
   const focus = clean(body.focus, 1800);
+  const mode = body.mode === "deep" ? "deep" : "fast";
 
   const prompt = `Find ${count} overseas B2B SaaS/AI companies that are plausible buyers of a low-risk Korea market-entry sales pilot now.\n\nBuyer profile: ${focus || "Seed-Series B B2B SaaS/AI, recent APAC/Japan/Singapore/global expansion or sales/partnership hiring, clear Korea B2B use case, and no obvious mature Korea sales team."}\n\nFor each candidate verify a current trigger with public web evidence. Avoid giant companies. Do NOT research Korean target accounts yet; that happens in the next stage.\n\nReturn JSON only:\n{"candidates":[{"company":"","url":"","country":"","category":"","trigger":"","source_urls":[],"recommended_role":"","contact_search_query":""}],"strategy":{"best_segment":"","pitch":""}}`;
 
-  const attempts = [
-    { model: "groq/compound", timeoutMs: 26000, deep: true },
-    { model: "groq/compound-mini", timeoutMs: 16000, deep: false }
-  ];
+  const attempts = mode === "deep"
+    ? [
+        { model: "groq/compound", timeoutMs: 26000, deep: true },
+        { model: "groq/compound-mini", timeoutMs: 16000, deep: false }
+      ]
+    : [
+        { model: "groq/compound-mini", timeoutMs: 16000, deep: false },
+        { model: "groq/compound", timeoutMs: 22000, deep: true }
+      ];
+
   const failures = [];
   for (const attempt of attempts) {
     try {
@@ -75,7 +82,7 @@ export async function POST(request) {
         contact_search_query: clean(c?.contact_search_query, 280)
       })).filter(c => c.company && /^https?:\/\//i.test(c.url)) : [];
       if (!candidates.length) throw new Error("No usable candidates returned");
-      return Response.json({ candidates, strategy: data?.strategy || {}, meta: { model: attempt.model, fallback_used: attempt !== attempts[0] } }, { headers: { "Cache-Control": "no-store" } });
+      return Response.json({ candidates, strategy: data?.strategy || {}, meta: { model: attempt.model, mode, fallback_used: attempt !== attempts[0] } }, { headers: { "Cache-Control": "no-store" } });
     } catch (error) {
       failures.push(error?.name === "AbortError" ? "timeout" : clean(error?.message, 600));
     }
