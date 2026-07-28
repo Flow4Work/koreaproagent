@@ -3,76 +3,37 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="APAC 확장 신호와 한국 영업 공백을 검증해 지금 연락할 해외 B2B SaaS 후보와 근거를 보여주는 한국 시장 영업 에이전트" />
+  <meta name="description" content="한국 시장 영업 후보를 빠르게 검증하고 연락처와 한국 테스트 계정을 보강하는 내부 영업 도구" />
   <title>한국 시장 영업 에이전트</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/styles.css?v=20260728-2" />
-  <link rel="stylesheet" href="/workflow-v2.css?v=20260728-1" />
+  <link rel="stylesheet" href="/tool-v3.css?v=20260729-1" />
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="brand">
-        <div class="logo">K</div>
-        <div>
-          <strong>한국 시장 영업 에이전트</strong>
-          <span>많이 찾지 않고, 지금 연락할 이유가 있는 회사만 남깁니다</span>
-        </div>
-      </div>
-      <div class="api-tools">
-        <div class="status" id="apiStatus"><span class="dot"></span><span>연결 확인 중</span></div>
-        <button class="ghost small" id="diagBtn" type="button">상태 확인</button>
+      <div class="brand"><div class="logo">K</div><strong>한국 시장 영업 에이전트</strong></div>
+      <div class="tools">
+        <div class="status" id="apiStatus"><span class="dot"></span><span>확인 중</span></div>
+        <button class="ghost" id="diagBtn" type="button">상태</button>
       </div>
     </header>
 
-    <div class="diag-panel hidden" id="diagPanel"></div>
+    <div id="diagPanel" class="hidden"></div>
 
-    <main class="main compact-main">
-      <section class="command-panel panel">
-        <div>
-          <span class="step">TODAY</span>
-          <h1>오늘 연락할 회사 3곳</h1>
-          <p>APAC 확장 신호와 한국 영업조직 공백을 먼저 검증합니다. 이메일이나 한국 샘플이 덜 완성돼도 검증된 회사와 근거는 숨기지 않고 함께 보여줍니다.</p>
+    <main class="main">
+      <div class="toolbar">
+        <div class="toolbar-title">
+          <h1>영업 후보</h1>
+          <small>신호가 강한 회사부터 보고, 연락처·한국 계정은 뒤에서 자동 보강</small>
         </div>
-        <button class="primary run-main" id="salesRunBtn" type="button"><span>오늘 연락할 3곳 찾기</span></button>
-      </section>
-
-      <div class="quality-strip" aria-label="quality gates">
-        <span><b>1</b> APAC 확장</span>
-        <span><b>2</b> 한국 조직 공백</span>
-        <span><b>3</b> 최근 GTM 타이밍</span>
-        <span><b>4</b> 연락처 탐색</span>
-        <span><b>5</b> 한국 구매신호 계정</span>
+        <button class="primary" id="runBtn" type="button">새 후보 찾기</button>
       </div>
-
-      <section class="panel result-panel sales-result-panel">
-        <div class="result-head">
-          <div><span class="step">SHORTLIST</span><h2>지금 연락할 회사</h2></div>
-        </div>
-
-        <div class="empty" id="salesEmpty">
-          <div class="empty-icon">↗</div>
-          <h3>검색 결과가 아니라 영업 판단을 만듭니다.</h3>
-          <p>발송 준비가 덜 됐더라도 회사·성장 신호·공개 근거·추천 담당 직책까지 확인된 정보는 결과에 남깁니다.</p>
-        </div>
-
-        <div class="loading hidden" id="salesLoading">
-          <div class="spinner"></div>
-          <h3 id="salesLoadingTitle">APAC 확장 신호를 찾고 있습니다.</h3>
-          <p id="salesLoadingText">한국 조직 공백과 GTM 담당자까지 순서대로 검증합니다.</p>
-          <div class="progress"><span></span></div>
-        </div>
-
-        <div class="error-box hidden" id="salesError"></div>
-        <div class="results hidden" id="salesResults">
-          <div class="sales-summary" id="salesSummary"></div>
-          <div id="salesContent"></div>
-        </div>
-      </section>
+      <div class="summary" id="summary"></div>
+      <section class="panel" id="content"></section>
     </main>
   </div>
-  <script src="/app-v2.js?v=20260728-nohunter-partials-v1" defer></script>
+  <script src="/app-v3.js?v=20260729-1" defer></script>
 </body>
 </html>
