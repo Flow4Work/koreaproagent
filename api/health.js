@@ -1,4 +1,4 @@
-import { contactProviderStatus, hunterKeyConfigured } from '../lib/hunter.js';
+import { contactDiscoveryConfigured, contactProviderStatus } from '../lib/contact-discovery.js';
 import { AI_MODEL, AI_PROVIDER, aiConfigured, checkAiConnection } from '../lib/ai-provider.js';
 
 function safeMessage(text = '') {
@@ -11,8 +11,8 @@ function safeMessage(text = '') {
 export async function GET() {
   const zenKeyConfigured = aiConfigured();
   const tavilyKeyConfigured = Boolean(process.env.TAVILY_API_KEY);
-  const hunterKeyIsConfigured = hunterKeyConfigured();
   const contactProviders = contactProviderStatus();
+  const contactsConfigured = contactDiscoveryConfigured();
 
   const ai = await checkAiConnection();
   const result = {
@@ -23,14 +23,13 @@ export async function GET() {
     aiConnected: Boolean(ai.ok),
     aiModelAvailable: Boolean(ai.available),
     tavilyConfigured: tavilyKeyConfigured,
-    hunterConfigured: hunterKeyIsConfigured,
-    contactDiscoveryConfigured: true,
+    contactDiscoveryConfigured: contactsConfigured,
     contactProviders,
     searchProvider: 'tavily',
     models: [AI_MODEL],
     timestamp: new Date().toISOString(),
 
-    // Legacy aliases so the current frontend keeps working during migration.
+    // Legacy AI aliases kept for the current frontend.
     groqConfigured: zenKeyConfigured,
     groqConnected: Boolean(ai.ok),
     allModelsAvailable: Boolean(ai.available)
