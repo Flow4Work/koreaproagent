@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="해외 B2B SaaS를 자동 발굴하고 담당자 이메일, 한국 잠재고객 3곳, 맞춤 메일까지 한 번에 준비하는 영업 도구" />
+  <meta name="description" content="APAC 확장 신호와 한국 영업 공백을 검증해 오늘 실제로 연락할 해외 B2B SaaS만 보여주는 한국 시장 영업 에이전트" />
   <title>한국 시장 영업 에이전트</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=20260728-2" />
-  <link rel="stylesheet" href="/workflow.css?v=20260728-6" />
+  <link rel="stylesheet" href="/workflow-v2.css?v=20260728-1" />
 </head>
 <body>
   <div class="shell">
@@ -18,7 +18,7 @@
         <div class="logo">K</div>
         <div>
           <strong>한국 시장 영업 에이전트</strong>
-          <span>해외 SaaS를 찾아 한국 시장 테스트 제안까지 준비합니다</span>
+          <span>많이 찾지 않고, 지금 연락할 이유가 있는 회사만 남깁니다</span>
         </div>
       </div>
       <div class="api-tools">
@@ -26,41 +26,42 @@
         <button class="ghost small" id="diagBtn" type="button">상태 확인</button>
       </div>
     </header>
+
     <div class="diag-panel hidden" id="diagPanel"></div>
 
     <main class="main compact-main">
       <section class="command-panel panel">
         <div>
           <span class="step">TODAY</span>
-          <h1>오늘 영업 돌리기</h1>
-          <p>회사를 고르거나 조건을 만질 필요 없습니다. 최근 성장 신호가 있는 해외 B2B SaaS를 넓게 찾고, 실제 담당자 이메일이 확인된 회사만 한국 잠재고객 3곳과 맞춤 메일까지 준비합니다.</p>
+          <h1>오늘 연락할 회사 3곳</h1>
+          <p>APAC 확장 신호가 있고, 한국 영업조직은 아직 뚜렷하지 않으며, 실제 GTM 담당자 이메일까지 확인된 회사만 남깁니다. 좋은 회사가 없으면 억지로 3곳을 채우지 않습니다.</p>
         </div>
-        <button class="primary run-main" id="salesRunBtn" type="button"><span>오늘 영업 준비</span></button>
+        <button class="primary run-main" id="salesRunBtn" type="button"><span>오늘 연락할 3곳 찾기</span></button>
       </section>
 
-      <section class="run-stats panel" id="runStats">
-        <div><span>탐색</span><strong id="statDiscovered">0</strong><small>후보</small></div>
-        <div><span>이메일</span><strong id="statEmail">0</strong><small>확보</small></div>
-        <div><span>샘플</span><strong id="statSample">0</strong><small>완성</small></div>
-        <div><span>발송 준비</span><strong id="statReady">0</strong><small>메일</small></div>
-      </section>
+      <div class="quality-strip" aria-label="quality gates">
+        <span><b>1</b> APAC 확장</span>
+        <span><b>2</b> 한국 조직 공백</span>
+        <span><b>3</b> 최근 GTM 타이밍</span>
+        <span><b>4</b> 업무 이메일 검증</span>
+        <span><b>5</b> 한국 구매신호 계정</span>
+      </div>
 
       <section class="panel result-panel sales-result-panel">
         <div class="result-head">
-          <div><span class="step">OUTBOX</span><h2>발송 준비된 회사</h2></div>
-          <button class="send-all" id="sendAllBtn" type="button" disabled>준비된 메일 열기</button>
+          <div><span class="step">SHORTLIST</span><h2>지금 연락할 회사</h2></div>
         </div>
 
         <div class="empty" id="salesEmpty">
           <div class="empty-icon">↗</div>
-          <h3>검토할 목록이 아니라 보낼 메일을 만듭니다.</h3>
-          <p>위 버튼 한 번으로 회사 발굴 → 담당자 이메일 → 한국 잠재고객 3곳 → 맞춤 메일까지 이어집니다.</p>
+          <h3>검색 결과가 아니라 영업 판단을 만듭니다.</h3>
+          <p>유명한 회사 이름을 채워 넣지 않습니다. 왜 지금인지, 왜 한국인지, 누구에게 연락할지, 어떤 한국 계정으로 테스트할지까지 근거가 있는 경우만 보여줍니다.</p>
         </div>
 
         <div class="loading hidden" id="salesLoading">
           <div class="spinner"></div>
-          <h3 id="salesLoadingTitle">해외 SaaS를 넓게 찾고 있습니다.</h3>
-          <p id="salesLoadingText">최근 성장 신호와 한국 진출 가능성을 확인 중입니다.</p>
+          <h3 id="salesLoadingTitle">APAC 확장 신호를 찾고 있습니다.</h3>
+          <p id="salesLoadingText">한국 조직 공백과 실제 GTM 담당자까지 순서대로 검증합니다.</p>
           <div class="progress"><span></span></div>
         </div>
 
@@ -72,6 +73,6 @@
       </section>
     </main>
   </div>
-  <script src="/app.js?v=20260728-6" defer></script>
+  <script src="/app-v2.js?v=20260728-1" defer></script>
 </body>
 </html>
