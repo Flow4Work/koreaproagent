@@ -1,7 +1,6 @@
 import { tavilyConfigured, tavilySearch, tavilySearchMany, formatEvidence } from '../lib/web-search.js';
+import { AI_MODEL, AI_PROVIDER, aiConfigured, chatJson } from '../lib/ai-provider.js';
 
-const GROQ_CHAT_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const STRUCTURE_MODEL = 'openai/gpt-oss-120b';
 const HUNTER_DOMAIN_URL = 'https://api.hunter.io/v2/domain-search';
 
 const DISCOVERY_EXCLUDES = [
@@ -50,8 +49,8 @@ function clean(v, max = 1400) {
 }
 function safeError(v = '') {
   return String(v)
-    .replace(/gsk_[A-Za-z0-9_-]+/g, '[redacted]')
     .replace(/tvly-[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/[A-Za-z0-9_-]{32,}/g, '[key]')
     .slice(0, 700);
 }
 function hostname(v = '') {
@@ -94,9 +93,7 @@ function companySignalContext(row, company) {
   const title = String(row?.title || '');
   const content = String(row?.content || '');
   const pattern = new RegExp(escapeRegExp(company), 'i');
-  if (pattern.test(title) && TRIGGER.test(`${title} ${content}`)) {
-    return clean(title, 220);
-  }
+  if (pattern.test(title) && TRIGGER.test(`${title} ${content}`)) return clean(title, 220);
   const lowerContent = content.toLowerCase();
   const lowerCompany = String(company || '').toLowerCase();
   const index = lowerContent.indexOf(lowerCompany);
@@ -193,28 +190,6 @@ async function discoverEvidence(focus, searchVariant) {
   };
 }
 
-const schema = {
-  type: 'object',
-  properties: {
-    candidates: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          company: { type: 'string' },
-          official_url_hint: { type: 'string' },
-          source_urls: { type: 'array', items: { type: 'string' } },
-          recommended_role: { type: 'string' }
-        },
-        required: ['company','official_url_hint','source_urls','recommended_role'],
-        additionalProperties: false
-      }
-    }
-  },
-  required: ['candidates'],
-  additionalProperties: false
-};
-
 async function shortlist(evidence, focus, excludeCompanies = []) {
   const exclusions = excludeCompanies.length ? excludeCompanies.slice(0, 40).join(', ') : '없음';
   const prompt = `아래 SOURCE만 사용해서 우리가 "한국 시장 테스트/아웃바운드 파일럿"을 제안할 해외 회사를 최대 12곳 고른다.
@@ -248,45 +223,18 @@ async function shortlist(evidence, focus, excludeCompanies = []) {
 7) 숫자 점수나 근거 밖 사실을 만들지 않는다.
 8) 적합한 회사가 적으면 억지로 채우지 않는다.
 
+반드시 아래 JSON 구조만 반환:
+{"candidates":[{"company":"","official_url_hint":"","source_urls":[],"recommended_role":""}]}
+
 ${evidence.slice(0, 13000)}`;
 
-  const c = new AbortController(), t = setTimeout(() => c.abort(), 24000);
-  try {
-    const response = await fetch(GROQ_CHAT_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: STRUCTURE_MODEL,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0,
-        reasoning_effort: 'low',
-        reasoning_format: 'hidden',
-        max_completion_tokens: 1700,
-        response_format: { type: 'json_schema', json_schema: { name: 'candidate_names', strict: true, schema } }
-      }),
-      signal: c.signal
-    });
-    const raw = await response.text();
-    if (!response.ok) {
-      let d = raw;
-      try { d = JSON.parse(raw)?.error?.message || raw; } catch {}
-      const e = new Error(`Groq HTTP ${response.status}: ${safeError(d)}`);
-      e.status = response.status;
-      throw e;
-    }
-    const payload = JSON.parse(raw), content = payload?.choices?.[0]?.message?.content;
-    if (!content) throw new Error('후보 분석 결과가 비어 있습니다.');
-    return { data: JSON.parse(content), usage: payload?.usage || null };
-  } catch (e) {
-    if (e?.name === 'AbortError') {
-      const x = new Error('후보 정리가 시간 초과되었습니다.');
-      x.status = 504;
-      throw x;
-    }
-    throw e;
-  } finally {
-    clearTimeout(t);
-  }
+  const structured = await chatJson({ prompt, maxTokens: 1700, timeoutMs: 35000, temperature: 0 });
+  const candidates = Array.isArray(structured.data?.candidates) ? structured.data.candidates : [];
+  return {
+    data: { candidates: candidates.slice(0, 12) },
+    usage: structured.usage || null,
+    model: structured.model || AI_MODEL
+  };
 }
 
 async function verifyCandidate(candidate, discoverySources, excludeCompanies = []) {
@@ -404,11 +352,13 @@ function buildOutreach(company, contact, signalTitle) {
 }
 
 export async function POST(request) {
-  if (!process.env.GROQ_API_KEY) return Response.json({ error: '분석 엔진 설정이 필요합니다.' }, { status: 503 });
+  if (!aiConfigured()) return Response.json({ error: 'OPENCODE_ZEN_API_KEY가 Vercel 환경변수에 없습니다.' }, { status: 503 });
   if (!tavilyConfigured()) return Response.json({ error: '검색 엔진 설정이 필요합니다.' }, { status: 503 });
 
   let body = {};
-  try { body = await request.json(); } catch { return Response.json({ error: '요청 형식이 잘못됐습니다.' }, { status: 400 }); }
+  try { body = await request.json(); }
+  catch { return Response.json({ error: '요청 형식이 잘못됐습니다.' }, { status: 400 }); }
+
   const focus = clean(body.focus, 600);
   const searchVariant = clean(body.searchVariant, 120);
   const excludeCompanies = Array.isArray(body.excludeCompanies)
@@ -458,21 +408,22 @@ export async function POST(request) {
 
     return Response.json({
       leads,
-      strategy: { next_action: '1위 회사의 영업·사업개발 담당자에게 한국 잠재고객 3곳 무료 샘플을 제안합니다.' },
+      strategy: { next_action: '실제 이메일이 확인된 영업·사업개발 담당자에게 한국 잠재고객 3곳 무료 샘플을 제안합니다.' },
       meta: {
         search: discovery.meta,
-        structure_model: STRUCTURE_MODEL,
+        ai_provider: AI_PROVIDER,
+        structure_model: short.model || AI_MODEL,
         structure_usage: short.usage,
         returned_count: leads.length,
         excluded_recent_count: excludeCompanies.length,
         hunter_configured: Boolean(process.env.HUNTER_API_KEY),
-        pipeline: '탐색 주제 순환 → 최신 성장 신호 검색 → 회사별 근거 검증 → B2B/한국 조직 확인 → GTM 담당자 탐색 → 첫 연락 준비'
+        pipeline: '탐색 주제 순환 → Tavily 최신 성장 신호 → DeepSeek 후보 정리 → 회사별 근거 검증 → Hunter GTM 담당자 → 첫 연락 준비'
       }
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
     return Response.json({
       error: safeError(e?.message || e),
-      hint: e?.status === 429 ? 'API 사용량 제한입니다. 잠시 후 다시 시도하세요.' : '고객 발굴 과정에서 오류가 발생했습니다.'
+      hint: e?.status === 429 ? 'OpenCode Zen 사용량 제한입니다. 잠시 후 다시 시도하세요.' : '고객 발굴 과정에서 오류가 발생했습니다.'
     }, { status: e?.status || 502 });
   }
 }
