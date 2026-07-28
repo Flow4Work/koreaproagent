@@ -1,4 +1,4 @@
-import { hunterConfigured } from '../lib/hunter.js';
+import { contactProviderStatus, hunterKeyConfigured } from '../lib/hunter.js';
 import { AI_MODEL, AI_PROVIDER, aiConfigured, checkAiConnection } from '../lib/ai-provider.js';
 
 function safeMessage(text = '') {
@@ -11,7 +11,8 @@ function safeMessage(text = '') {
 export async function GET() {
   const zenKeyConfigured = aiConfigured();
   const tavilyKeyConfigured = Boolean(process.env.TAVILY_API_KEY);
-  const hunterKeyConfigured = hunterConfigured();
+  const hunterKeyIsConfigured = hunterKeyConfigured();
+  const contactProviders = contactProviderStatus();
 
   const ai = await checkAiConnection();
   const result = {
@@ -22,7 +23,9 @@ export async function GET() {
     aiConnected: Boolean(ai.ok),
     aiModelAvailable: Boolean(ai.available),
     tavilyConfigured: tavilyKeyConfigured,
-    hunterConfigured: hunterKeyConfigured,
+    hunterConfigured: hunterKeyIsConfigured,
+    contactDiscoveryConfigured: true,
+    contactProviders,
     searchProvider: 'tavily',
     models: [AI_MODEL],
     timestamp: new Date().toISOString(),
