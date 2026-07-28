@@ -102,10 +102,18 @@ function companySignalContext(row, company) {
   return TRIGGER.test(window) ? clean(window.replace(/\s+/g, ' '), 220) : '';
 }
 function candidateEvidence(company, sources) {
-  return sources
+  const strict = sources
     .map(row => ({ row, signal: companySignalContext(row, company) }))
-    .filter(x => x.signal)
-    .slice(0, 4);
+    .filter(x => x.signal);
+  if (strict.length) return strict.slice(0, 4);
+
+  // Search snippets are short. If the company and a growth trigger are both in the same result,
+  // keep it as a weaker fallback instead of discarding the company entirely.
+  const pattern = new RegExp(escapeRegExp(company), 'i');
+  return sources
+    .filter(row => pattern.test(`${row?.title || ''} ${row?.content || ''}`) && TRIGGER.test(`${row?.title || ''} ${row?.content || ''}`))
+    .slice(0, 3)
+    .map(row => ({ row, signal: clean(row?.title || row?.content || '', 220) }));
 }
 function likelyB2BSoftware(rows = []) {
   const text = evidenceText(rows);
@@ -121,9 +129,8 @@ function explicitKoreaPresence(text = '') {
     /(office|team|subsidiary|operations)\s+(in|for)\s+(south\s+)?korea/,
     /seoul\s+(office|team|hub|based|role|roles|jobs|location)/,
     /(country manager|head of|general manager)[^.!?]{0,40}(korea|seoul)/,
-    /(launch|launched|launching|operate|operating|operations)[^.!?]{0,40}(in\s+)?(south\s+)?korea/,
     /(acquire|acquired|acquisition)[^.!?]{0,80}(korea|korean)/,
-    /(korea|korean)[^.!?]{0,50}(subsidiary|entity|license|office|team)/
+    /(korea|korean)[^.!?]{0,50}(subsidiary|entity|office|team|country manager|sales team)/
   ].some(r => r.test(s));
 }
 function pickOfficialUrl(company, hint, rows) {
@@ -179,7 +186,7 @@ async function discoverEvidence(focus, searchVariant) {
     maxResults: 12,
     timeRange: 'year',
     excludeDomains: DISCOVERY_EXCLUDES,
-    topic: 'news'
+    topic: 'general'
   });
   const sources = r.results.slice(0, 34);
   if (!sources.length) throw new Error('최신 후보 근거를 찾지 못했습니다.');
@@ -211,12 +218,12 @@ async function shortlist(evidence, focus, excludeCompanies = []) {
 - AI 연구소/모델 연구가 본업이고 판매 가능한 B2B 소프트웨어가 확인되지 않는 회사
 - 반도체·GPU·서버·장비 제조사 등 하드웨어가 본업인 회사
 - 컨설팅/에이전시/채용대행사
-- SOURCE에 회사명이 직접 등장하지 않거나 회사 주변 문맥에 최신 성장/확장 신호가 없는 경우
+- SOURCE에 회사명이 직접 등장하지 않는 경우
 
 절대 규칙:
 1) 회사명은 SOURCE 제목 또는 본문에 직접 등장해야 한다.
 2) source_urls는 그 회사를 직접 언급한 SOURCE URL만 사용한다.
-3) 한 기사에 여러 회사가 등장해도 그 회사 주변 문맥에 성장 신호가 없으면 후보로 넣지 않는다.
+3) 최근 성장·확장 신호가 같은 SOURCE 안에서 확인되면 우선한다.
 4) official_url_hint는 SOURCE에 명확한 공식 홈페이지가 있을 때만 넣고 아니면 빈 문자열.
 5) recommended_role은 Head of APAC, VP Sales, Head of Sales, Business Development, Partnerships, Growth, CEO, Founder 중 가장 적절한 하나.
 6) CTO, Engineering, Product, Research 직책은 한국 시장 영업 제안의 1차 담당자로 선택하지 않는다.
@@ -284,7 +291,7 @@ async function verifyCandidate(candidate, discoverySources, excludeCompanies = [
     evidence,
     recommended_role: role,
     contact_search_query: `"${company}" ("Head of APAC" OR "VP Sales" OR "Head of Sales" OR Partnerships OR "Business Development" OR "Market Expansion") LinkedIn`,
-    verification_status: '공식 사이트 확인 · 한국 현지 영업조직 명시 자료 미발견'
+    verification_status: '공식 사이트 확인 · 대규모 한국 현지 영업조직 명시 자료 미발견'
   };
 }
 
@@ -371,7 +378,23 @@ export async function POST(request) {
     const candidates = (Array.isArray(short.data?.candidates) ? short.data.candidates : [])
       .filter(x => !excludedCompany(x?.company, excludeCompanies))
       .slice(0, 12);
-    if (!candidates.length) return Response.json({ error: '새 조건에 맞는 해외 B2B 소프트웨어 회사를 찾지 못했습니다.' }, { status: 422 });
+
+    if (!candidates.length) {
+      return Response.json({
+        leads: [],
+        strategy: { next_action: '이번 검색 묶음은 건너뛰고 다음 후보군을 자동 탐색합니다.' },
+        meta: {
+          search: discovery.meta,
+          ai_provider: AI_PROVIDER,
+          structure_model: short.model || AI_MODEL,
+          structure_usage: short.usage,
+          returned_count: 0,
+          excluded_recent_count: excludeCompanies.length,
+          hunter_configured: Boolean(process.env.HUNTER_API_KEY),
+          stage: 'shortlist_empty'
+        }
+      }, { headers: { 'Cache-Control': 'no-store' } });
+    }
 
     const verified = [];
     for (const candidate of candidates) {
@@ -384,13 +407,23 @@ export async function POST(request) {
 
     if (!verified.length) {
       return Response.json({
-        error: '새 성장 신호·B2B 소프트웨어·공식 사이트·한국 조직 조건을 모두 통과한 회사가 없었습니다.',
-        hint: '다른 탐색 주제를 선택해 다시 실행하세요.'
-      }, { status: 422 });
+        leads: [],
+        strategy: { next_action: '이번 후보군은 건너뛰고 다음 검색 묶음을 자동 탐색합니다.' },
+        meta: {
+          search: discovery.meta,
+          ai_provider: AI_PROVIDER,
+          structure_model: short.model || AI_MODEL,
+          structure_usage: short.usage,
+          returned_count: 0,
+          excluded_recent_count: excludeCompanies.length,
+          hunter_configured: Boolean(process.env.HUNTER_API_KEY),
+          stage: 'verification_empty'
+        }
+      }, { headers: { 'Cache-Control': 'no-store' } });
     }
 
     verified.sort((a, b) => b.priority_score - a.priority_score);
-    const selected = verified.slice(0, 3);
+    const selected = verified.slice(0, 4);
     const leads = [];
     for (let i = 0; i < selected.length; i++) {
       const lead = selected[i];
@@ -417,7 +450,7 @@ export async function POST(request) {
         returned_count: leads.length,
         excluded_recent_count: excludeCompanies.length,
         hunter_configured: Boolean(process.env.HUNTER_API_KEY),
-        pipeline: '탐색 주제 순환 → Tavily 최신 성장 신호 → DeepSeek 후보 정리 → 회사별 근거 검증 → Hunter GTM 담당자 → 첫 연락 준비'
+        pipeline: 'Tavily 후보 탐색 → DeepSeek 후보 정리 → 회사별 공식/B2B 검증 → 한국 현지팀 과다 여부 확인 → Hunter GTM 담당자 → 첫 연락 준비'
       }
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (e) {
