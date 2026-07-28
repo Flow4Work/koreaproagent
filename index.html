@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="해외 B2B SaaS를 발굴하고 담당자, 맞춤 첫 메시지, 한국 잠재고객 샘플까지 한 번에 만드는 영업 도구" />
+  <meta name="description" content="해외 B2B SaaS를 찾아 담당자 이메일, 한국 잠재고객 3곳, 맞춤 메일까지 한 번에 준비하는 영업 도구" />
   <title>한국 시장 영업 에이전트</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/styles.css?v=20260728-2" />
-  <link rel="stylesheet" href="/workflow.css?v=20260728-4" />
+  <link rel="stylesheet" href="/workflow.css?v=20260728-5" />
 </head>
 <body>
   <div class="shell">
@@ -18,7 +18,7 @@
         <div class="logo">K</div>
         <div>
           <strong>한국 시장 영업 에이전트</strong>
-          <span>해외 SaaS 발굴 → 담당자 → 맞춤 메시지 + 한국 샘플</span>
+          <span>오늘 보낼 회사 3곳을 바로 준비합니다</span>
         </div>
       </div>
       <div class="api-tools">
@@ -29,65 +29,42 @@
     <div class="diag-panel hidden" id="diagPanel"></div>
 
     <main class="main compact-main">
-      <section class="one-click-bar">
-        <strong>한 번 실행하면</strong>
-        <span>살 가능성 있는 해외 회사 검증</span>
-        <i>→</i>
-        <span>실제 영업 담당자·이메일</span>
-        <i>→</i>
-        <span>회사별 맞춤 첫 메시지</span>
-        <i>→</i>
-        <span>한국 잠재고객 3곳 무료 샘플</span>
-      </section>
-
       <section class="workspace">
         <aside class="panel input-panel">
           <div class="panel-head">
-            <div><span class="step">START</span><h2>오늘 보낼 3곳 만들기</h2></div>
+            <div><span class="step">START</span><h2>오늘 보낼 3곳</h2></div>
           </div>
-          <p class="panel-desc">후보 목록만 만들지 않습니다. 연락할 회사, 담당자, 메시지, 한국 샘플까지 한 번에 준비합니다.</p>
+          <p class="panel-desc">분석표를 보는 도구가 아닙니다. 회사·담당자 이메일·한국 샘플 3곳·보낼 메일까지 자동으로 만듭니다.</p>
 
           <div class="daily-topic-panel">
             <div class="daily-topic-head">
-              <strong>오늘의 탐색 주제</strong>
+              <strong>오늘의 타깃</strong>
               <span id="topicTimeLabel">추천 준비 중</span>
             </div>
             <div class="topic-chips" id="dailyTopics"></div>
           </div>
+          <input id="salesFocus" type="hidden" value="" />
 
-          <details class="advanced-filter">
-            <summary>조건 직접 입력 <span>선택</span></summary>
-            <label>추가 조건
-              <textarea id="salesFocus" rows="4" placeholder="예: 최근 일본·싱가포르 확장 신호가 있는 개발자 도구 SaaS"></textarea>
-            </label>
-          </details>
-
-          <button class="primary" id="salesRunBtn" type="button"><span>보낼 후보 3곳 만들기</span></button>
-          <div class="what-we-check">
-            <strong>자동으로 끝내는 것</strong>
-            <span>회사 적합성·최근 신호</span>
-            <span>담당자·업무 이메일</span>
-            <span>한국 잠재고객 3곳</span>
-            <span>맞춤 첫 연락 메시지</span>
-          </div>
+          <button class="primary" id="salesRunBtn" type="button"><span>3곳 만들기</span></button>
+          <div class="auto-note">최근 본 회사는 제외하고, 업무 이메일까지 찾은 회사를 우선합니다.</div>
         </aside>
 
         <section class="panel result-panel sales-result-panel">
           <div class="result-head">
-            <div><span class="step">READY</span><h2>바로 연락할 잠재고객</h2></div>
-            <div class="actions"><button class="ghost small" id="salesCsv" disabled>CSV 저장</button></div>
+            <div><span class="step">SEND</span><h2>오늘 보낼 메일</h2></div>
+            <button class="send-all" id="sendAllBtn" type="button" disabled>3곳 메일 보내기</button>
           </div>
 
           <div class="empty" id="salesEmpty">
             <div class="empty-icon">↗</div>
-            <h3>여기에는 ‘검토할 후보’가 아니라 ‘보낼 준비가 된 회사’가 쌓입니다.</h3>
-            <p>버튼 한 번으로 해외 회사 발굴부터 한국 샘플까지 준비합니다.</p>
+            <h3>버튼 한 번이면 됩니다.</h3>
+            <p>보낼 상대와 메일 내용까지 준비되면 이곳에 바로 나타납니다.</p>
           </div>
 
           <div class="loading hidden" id="salesLoading">
             <div class="spinner"></div>
-            <h3 id="salesLoadingTitle">살 가능성이 높은 해외 회사를 찾고 있습니다.</h3>
-            <p id="salesLoadingText">회사 검증 → 담당자·이메일 → 한국 샘플 → 맞춤 메시지</p>
+            <h3 id="salesLoadingTitle">보낼 회사를 찾고 있습니다.</h3>
+            <p id="salesLoadingText">회사 검증 → 담당자 이메일 → 한국 잠재고객 3곳 → 맞춤 메일</p>
             <div class="progress"><span></span></div>
           </div>
 
@@ -100,6 +77,6 @@
       </section>
     </main>
   </div>
-  <script src="/app.js?v=20260728-4" defer></script>
+  <script src="/app.js?v=20260728-5" defer></script>
 </body>
 </html>
