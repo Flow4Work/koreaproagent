@@ -14,6 +14,27 @@
 
 **개인 이름·이메일은 추측하지 않습니다.** 공개 출처가 없으면 빈 값으로 남깁니다.
 
+## 담당자 탐색 Waterfall
+
+담당자 이메일은 한 서비스에 의존하지 않고 아래 순서로 찾습니다.
+
+`공식 웹사이트 공개 이메일 → Prospeo → Apollo → Hunter → Tomba`
+
+- 공식 웹사이트 단계는 별도 키 없이 먼저 실행합니다.
+- 각 외부 공급자는 키가 설정된 경우에만 실행하고, 결과가 나오면 뒤 공급자는 호출하지 않습니다.
+- 성공 결과는 서버 인스턴스에서 12시간, 실패 결과는 20분 캐시해 반복 호출을 줄입니다.
+- 추측 이메일은 만들지 않고 실제 공개/공급자 결과만 사용합니다.
+
+선택 환경 변수:
+
+```text
+PROSPEO_API_KEY=
+APOLLO_API_KEY=
+HUNTER_API_KEY=
+TOMBA_API_KEY=
+TOMBA_API_SECRET=
+```
+
 ## 가장 빠른 Vercel 배포
 
 1. Vercel → Add New → Project → `Flow4Work/koreaproagent` Import.
