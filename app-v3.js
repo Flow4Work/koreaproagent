@@ -1,32 +1,109 @@
 const $ = (id) => document.getElementById(id);
-const APP_VERSION = '20260730-stability-v2';
-const RECENT_KEY = 'kpa.v3.recent';
-const RESULT_KEY = 'kpa.v3.result';
-const RUN_KEY = 'kpa.v3.run';
-const MAX_RECENT = 100;
-const DISCOVER_LIMIT = 6;
-const CONTACT_LIMIT = 5;
-const READY_LIMIT = 3;
-const state = { data: null, busy: false, runToken: 0 };
 
-function escapeHtml(v = '') { return String(v).replace(/[&<>'"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[c])); }
-function safeUrl(v = '') { try { const u = new URL(v); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; } }
-function host(v = '') { try { return new URL(v).hostname.replace(/^www\./, ''); } catch { return v; } }
-function clean(v = '', max = 220) { return String(v || '').replace(/\s+/g, ' ').trim().slice(0, max); }
-function hasHangul(v = '') { return /[\u3131-\u318E\uAC00-\uD7A3]/.test(String(v || '')); }
-function english(v = '', max = 260) { const x = clean(v, max); return x && !hasHangul(x) ? x : ''; }
-function roleKo(role = '') { const k = String(role).toLowerCase(); if (k.includes('partnership')) return '파트너십 책임자'; if (k.includes('business development')) return '사업개발 책임자'; if (k.includes('sales')) return '영업 책임자'; if (k.includes('growth')) return '성장 책임자'; if (k.includes('apac') || k.includes('asia')) return 'APAC 책임자'; if (k.includes('founder')) return '창업자'; if (k.includes('ceo')) return '대표'; return role || 'GTM 책임자'; }
-function readRecent() { try { const v = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); return Array.isArray(v) ? v.slice(0, MAX_RECENT) : []; } catch { return []; } }
-function saveRecent(names = []) { const seen = new Set(); const merged = [...names, ...readRecent()].map(String).map(x => x.trim()).filter(Boolean).filter(x => { const k = x.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; }); localStorage.setItem(RECENT_KEY, JSON.stringify(merged.slice(0, MAX_RECENT))); }
-async function readJson(r) { const text = await r.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(`응답 형식 오류 (HTTP ${r.status})`); } if (!r.ok) throw new Error(`${data.error || `HTTP ${r.status}`}${data.hint ? ` · ${data.hint}` : ''}`); return data; }
-async function post(url, payload, timeout = 110000) { const c = new AbortController(), t = setTimeout(() => c.abort(), timeout); try { return await readJson(await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(payload), cache:'no-store', signal:c.signal })); } catch (e) { if (e?.name === 'AbortError') throw new Error('처리가 지연되어 이 단계만 중단했습니다.'); throw e; } finally { clearTimeout(t); } }
+const APP_VERSION = '20260730-revenue-hunt-v1';
+const LEADS_KEY = 'kpa.hunt.leads';
+const SELECTED_KEY = 'kpa.hunt.selected';
+const CYCLE_KEY = 'kpa.hunt.cycle';
+const FIRST_RUN_KEY = 'kpa.hunt.firstRun';
+const EXA_KEY = 'kpa.hunt.exaKey';
+const MAX_BUFFER = 250;
+const AUTO_DURATION_MS = 15 * 60 * 1000;
+
+const CAMPAIGNS = {
+  kbw: { label: 'KBW 단체복', icon: '👕', market: '해외→한국', message: 'en' },
+  apparel: { label: '국내 단체복', icon: '👕', market: '한국', message: 'ko' },
+  ax: { label: 'AX PoC', icon: '🤖', market: '한국', message: 'ko' },
+  video: { label: '영상 제작', icon: '🎬', market: '한국+해외', message: 'ko' },
+  dev: { label: '개발 Capacity', icon: '💻', market: '한국', message: 'ko' }
+};
+
+const state = {
+  leads: loadJson(LEADS_KEY, []),
+  selected: new Set(loadJson(SELECTED_KEY, [])),
+  controllers: new Set(),
+  cycle: Number(localStorage.getItem(CYCLE_KEY) || '0'),
+  firstRun: localStorage.getItem(FIRST_RUN_KEY) === '1',
+  auto: false,
+  manualRunning: false,
+  autoUntil: 0,
+  currentCampaign: localStorage.getItem('kpa.hunt.campaign') || 'kbw',
+  statusText: ''
+};
+
+function loadJson(key, fallback) {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) || 'null');
+    return value ?? fallback;
+  } catch { return fallback; }
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>'"]/g, ch => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', "'":'&#39;', '"':'&quot;' }[ch]));
+}
+
+function clean(value = '', max = 260) {
+  return String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
+}
+
+function safeUrl(value = '') {
+  try { const u = new URL(value); return ['http:','https:'].includes(u.protocol) ? u.href : ''; } catch { return ''; }
+}
+
+function host(value = '') {
+  try { return new URL(value).hostname.replace(/^www\./, ''); } catch { return clean(value, 120); }
+}
+
+function saveState() {
+  state.leads = state.leads.slice(0, MAX_BUFFER);
+  localStorage.setItem(LEADS_KEY, JSON.stringify(state.leads));
+  localStorage.setItem(SELECTED_KEY, JSON.stringify([...state.selected]));
+  localStorage.setItem(CYCLE_KEY, String(state.cycle));
+  localStorage.setItem('kpa.hunt.campaign', state.currentCampaign);
+}
+
+async function readJson(response) {
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; }
+  catch { throw new Error(`응답 형식 오류 (HTTP ${response.status})`); }
+  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  return data;
+}
+
+async function post(url, payload, timeout = 30000) {
+  const controller = new AbortController();
+  state.controllers.add(controller);
+  const timer = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await readJson(await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+      signal: controller.signal
+    }));
+  } catch (error) {
+    if (error?.name === 'AbortError') throw new Error('요청을 중단했습니다.');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    state.controllers.delete(controller);
+  }
+}
+
+function abortAll() {
+  for (const controller of state.controllers) {
+    try { controller.abort(); } catch {}
+  }
+  state.controllers.clear();
+}
 
 async function health() {
   try {
-    const d = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
-    const ok = Boolean(d.ok && d.inferenceSmokeOk && d.tavilyConfigured);
+    const h = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
+    const ok = Boolean(h.tavilyConfigured);
     $('apiStatus').className = `status ${ok ? 'ok' : 'bad'}`;
-    $('apiStatus').innerHTML = `<span class="dot"></span><span>${ok ? '정상' : '확인 필요'}</span>`;
+    $('apiStatus').innerHTML = `<span class="dot"></span><span>${ok ? '검색 연결됨' : '확인 필요'}</span>`;
     return ok;
   } catch {
     $('apiStatus').className = 'status bad';
@@ -42,104 +119,308 @@ async function diagnostics() {
   try {
     const h = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
     const line = (name, ok, detail) => `<div class="diag-row"><b class="${ok ? 'diag-ok' : 'diag-bad'}">${ok ? '✓' : '✕'}</b><span>${escapeHtml(name)} · ${escapeHtml(detail)}</span></div>`;
-    panel.innerHTML = `<div class="diag">${line('웹 검색', h.tavilyConfigured, h.tavilyConfigured ? '정상' : '설정 필요')}${line('AI 실제 추론', h.inferenceSmokeOk, h.inferenceSmokeModel || '실패')}${line('Groq fallback', h.groqConfigured, h.groqConfigured ? '설정됨' : '미설정')}${line('연락처 탐색', true, '공개 웹/연결된 공급자')}</div>`;
-  } catch (e) {
-    panel.innerHTML = `<div class="diag">${escapeHtml(e.message)}</div>`;
+    panel.innerHTML = `<div class="diag">${line('웹 검색', h.tavilyConfigured, h.tavilyConfigured ? 'Tavily 연결됨' : '설정 필요')}${line('AI', h.inferenceSmokeOk, h.inferenceSmokeModel || '현재 빠른 사냥은 AI 없이도 진행')}${line('연락처', h.contactDiscoveryConfigured || true, '공개 웹 + 연결된 공급자')}${line('Exa', Boolean(localStorage.getItem(EXA_KEY)), localStorage.getItem(EXA_KEY) ? '키 저장됨 · 아직 검색에는 미사용' : '연결 전')}</div>`;
+  } catch (error) {
+    panel.innerHTML = `<div class="diag">${escapeHtml(error.message)}</div>`;
   }
 }
-function setBusy(on, text = '') { state.busy = on; $('runBtn').disabled = on; $('runBtn').textContent = on ? (text || '준비 중…') : '오늘 영업 준비'; }
-function showLoading(title, sub) { $('content').innerHTML = `<div class="loading"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(sub)}</span></div>`; $('summary').innerHTML = ''; }
-function showError(msg) { $('content').innerHTML = `<div class="error">${escapeHtml(msg)}</div>`; $('summary').innerHTML = ''; }
 
-function triggerEn(lead) {
-  const direct = english(lead?.signal_title_en, 220);
-  if (direct) return direct;
-  const evidence = Array.isArray(lead?.evidence) ? lead.evidence : [];
-  for (const row of evidence) { const title = english(row?.title, 220); if (title) return title; }
-  return '';
+function campaign() {
+  return CAMPAIGNS[state.currentCampaign] || CAMPAIGNS.kbw;
 }
-function normalizedProspects(lead) {
-  const rows = Array.isArray(lead?.sample?.prospects) ? lead.sample.prospects : [];
-  return rows.map(p => {
-    const company = english(p?.company_en, 120) || english(p?.company, 120);
-    const role = english(p?.recommended_role_en, 120) || english(p?.recommended_role, 120);
-    const signal = english(p?.buying_signal_en, 220);
-    const fit = english(p?.why_fit_en, 220) || english(p?.sales_angle_en, 220);
-    const reason = signal || fit;
-    const sourceUrls = Array.isArray(p?.source_urls) ? p.source_urls.filter(safeUrl).slice(0, 2) : [];
-    return { ...p, company_en: company, recommended_role_en: role, reason_en: reason, evidence_urls: sourceUrls, signal_kind: signal ? 'signal' : 'fit' };
-  }).filter(p => p.company_en && p.recommended_role_en && p.reason_en && p.evidence_urls.length).slice(0, 3);
+
+function leadReady(lead) {
+  return Boolean(lead?.contact?.email && (lead.message_ko || lead.message_en));
 }
-function subjectFor(lead) { const n = normalizedProspects(lead).length; return n ? `${n} Korea accounts worth testing for ${english(lead.company, 100) || 'your team'}` : ''; }
-function buildOutreach(lead) {
+
+function leadMessage(lead) {
+  const cfg = CAMPAIGNS[lead.campaign] || CAMPAIGNS.kbw;
+  return cfg.message === 'en' ? (lead.message_en || lead.message_ko || '') : (lead.message_ko || lead.message_en || '');
+}
+
+function gmailUrl(lead) {
   const email = lead?.contact?.email;
-  const company = english(lead?.company, 120);
-  const trigger = triggerEn(lead);
-  const accounts = normalizedProspects(lead);
-  if (!email || !company || !trigger || !accounts.length) return '';
-  const first = english(String(lead?.contact?.name || '').trim().split(/\s+/)[0], 50);
-  const hello = first ? `Hi ${first},` : 'Hi,';
-  const lines = accounts.map((p, i) => `${i + 1}. ${p.company_en} — ${p.recommended_role_en}: ${p.reason_en}`).join('\n');
-  const body = `${hello}\n\nI noticed this recent move at ${company}: ${trigger}.\n\nI mapped ${accounts.length} Korean account${accounts.length > 1 ? 's' : ''} I would test first:\n\n${lines}\n\nThese are evidence-backed fit or buying-signal candidates, not a generic company list. I can verify the buyers, localize the outreach, and run a small Korea market test before you add local headcount.\n\nOpen to a quick Korea pilot?`;
-  return hasHangul(body) ? '' : body;
+  const subject = clean(lead.subject, 180);
+  const body = leadMessage(lead);
+  if (!email || !subject || !body) return '';
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
-function mailReady(lead) { return Boolean(lead?.contact?.email && triggerEn(lead) && normalizedProspects(lead).length && buildOutreach(lead)); }
-function gmailUrl(lead) { const to = lead?.contact?.email, subject = subjectFor(lead), body = buildOutreach(lead); if (!to || !subject || !body || hasHangul(`${subject}${body}`)) return ''; return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`; }
-function evidenceLinks(lead) { return (Array.isArray(lead?.evidence) ? lead.evidence : []).slice(0, 3).map((e, i) => { const u = safeUrl(e?.url); return u ? `<a href="${escapeHtml(u)}" target="_blank" rel="noopener noreferrer">근거 ${i + 1}</a>` : ''; }).join(''); }
-function stageText(lead) { if (mailReady(lead)) return '발송 준비 완료'; if (lead.sample_status === 'failed') return '한국 후보 검증 실패'; if (lead.sample_status === 'pending') return '한국 후보 검증 중'; if (lead.contact_status === 'failed') return '담당자 미확보'; if (lead.contact_status === 'pending') return '담당자 탐색 중'; if (!triggerEn(lead)) return '영문 근거 부족'; return '보류'; }
+
+function stageText(lead) {
+  if (leadReady(lead)) return '발송 준비';
+  if (lead.contact_status === 'searching') return '이메일 찾는 중';
+  if (lead.contact_status === 'failed') return '이메일 미확보';
+  return '후보 발견';
+}
+
+function remainingText() {
+  if (!state.auto || !state.autoUntil) return '';
+  const left = Math.max(0, state.autoUntil - Date.now());
+  const min = Math.floor(left / 60000);
+  const sec = Math.floor((left % 60000) / 1000);
+  return `${min}:${String(sec).padStart(2, '0')}`;
+}
+
+function updateMainButton() {
+  const button = $('runBtn');
+  button.classList.remove('auto-ready', 'hunting');
+  button.disabled = false;
+
+  if (state.auto) {
+    button.textContent = '진정시키기';
+    button.classList.add('hunting');
+    return;
+  }
+  if (state.manualRunning) {
+    button.textContent = '첫 사냥 중…';
+    button.disabled = true;
+    return;
+  }
+  if (state.firstRun) {
+    button.textContent = '자동사냥';
+    button.classList.add('auto-ready');
+    return;
+  }
+  button.textContent = '오늘 영업 준비';
+}
+
+function renderSummary() {
+  const ready = state.leads.filter(leadReady).length;
+  const contacts = state.leads.filter(x => x.contact?.email).length;
+  const selected = state.selected.size;
+  const auto = state.auto ? `<span class="hunt-live">자동사냥 ${remainingText()} 남음</span>` : '';
+  $('summary').innerHTML = `<strong>발송 가능 ${ready}개</strong><span>후보 ${state.leads.length}개</span><span>이메일 ${contacts}개</span><span>선택 ${selected}개</span>${auto}${state.statusText ? `<span>${escapeHtml(state.statusText)}</span>` : ''}`;
+}
 
 function render() {
-  const leads = state.data?.leads || [];
-  if (!leads.length) { $('content').innerHTML = '<div class="empty"><strong>아직 결과가 없습니다.</strong><span>오늘 영업 준비를 눌러 실제로 보낼 수 있는 메일을 만듭니다.</span></div>'; $('summary').innerHTML = ''; return; }
-  const ready = leads.filter(mailReady).slice(0, READY_LIMIT);
-  const contacts = leads.filter(x => x.contact?.email).length;
-  $('summary').innerHTML = `<strong>지금 보낼 수 있는 메일 ${ready.length}개</strong><span>담당자 ${contacts}개 확보</span><span>최대 ${READY_LIMIT}개만 발송 준비</span>`;
-  const ordered = [...ready, ...leads.filter(x => !mailReady(x))];
-  $('content').innerHTML = `<table class="lead-table"><thead><tr><th>#</th><th>회사</th><th>왜 지금</th><th>담당자</th><th>한국 타깃</th><th>다음 행동</th></tr></thead><tbody>${ordered.map((lead, i) => {
-    const c = lead.contact || {}, accounts = normalizedProspects(lead), mail = gmailUrl(lead), detailId = `detail-${i}`;
-    return `<tr class="data-row"><td class="rank">${i + 1}</td><td class="company"><strong>${escapeHtml(lead.company)}</strong>${lead.url ? `<a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(host(lead.url))}</a>` : ''}<p>${escapeHtml(lead.product_summary || '')}</p></td><td class="signal"><strong>${escapeHtml(triggerEn(lead) || lead.why_now || '검증 중')}</strong><small>${escapeHtml(stageText(lead))}</small></td><td class="contact">${c.email ? `<strong>${escapeHtml(c.name || roleKo(lead.recommended_role))}</strong><span>${escapeHtml(c.title || roleKo(lead.recommended_role))}</span><a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(roleKo(lead.recommended_role))}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`}</td><td>${accounts.length ? `<div class="sample-badges">${accounts.map(p => `<span class="sample-badge">${escapeHtml(p.company_en)}</span>`).join('')}</div>` : `<span class="sample-state">${escapeHtml(lead.sample_status === 'failed' ? '근거 있는 한국 후보 없음' : '대기')}</span>`}</td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail에서 열기</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button></div></td></tr><tr class="detail-row"><td colspan="6"><div class="detail" id="${detailId}"><section><h4>판단 근거</h4><p>${escapeHtml(lead.korea_opportunity || lead.korea_gap || lead.why_now || '')}</p></section><section><h4>출처</h4><div class="evidence">${evidenceLinks(lead)}</div></section>${accounts.length ? `<section><h4>한국 테스트 계정</h4><p>${accounts.map((p, idx) => `${idx + 1}. ${p.company_en} · ${p.recommended_role_en} · ${p.reason_en}`).map(escapeHtml).join('<br>')}</p></section>` : ''}${mail ? `<section class="mail-preview"><h4>실제로 보낼 영문 메일</h4><pre>${escapeHtml(buildOutreach(lead))}</pre></section>` : ''}</div></td></tr>`;
+  renderSummary();
+  updateMainButton();
+  const leads = [...state.leads].sort((a, b) => {
+    const sel = Number(state.selected.has(b.id)) - Number(state.selected.has(a.id));
+    if (sel) return sel;
+    const ready = Number(leadReady(b)) - Number(leadReady(a));
+    if (ready) return ready;
+    return (b.score || 0) - (a.score || 0);
+  });
+
+  if (!leads.length) {
+    $('content').innerHTML = '<div class="empty"><strong>아직 잡힌 후보가 없습니다.</strong><span>캠페인을 고르고 오늘 영업 준비를 눌러 시작합니다.</span></div>';
+    return;
+  }
+
+  $('content').innerHTML = `<table class="lead-table"><thead><tr><th></th><th>캠페인 / 회사</th><th>왜 지금</th><th>담당자 / 이메일</th><th>제안</th><th>상태</th><th>행동</th></tr></thead><tbody>${leads.map((lead, index) => {
+    const c = lead.contact || {};
+    const source = safeUrl(lead.source_url);
+    const mail = gmailUrl(lead);
+    const checked = state.selected.has(lead.id) ? 'checked' : '';
+    const detailId = `detail-${index}`;
+    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}">
+      <td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td>
+      <td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score) || 0}</p></td>
+      <td class="signal"><strong>${escapeHtml(clean(lead.signal, 240))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td>
+      <td class="contact">${c.email ? `<strong>${escapeHtml(c.name || lead.recommended_role || '담당자')}</strong><span>${escapeHtml(c.title || lead.recommended_role || '')}</span><a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(lead.recommended_role || '담당자')}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`}</td>
+      <td class="offer"><strong>${escapeHtml(clean(lead.offer, 180))}</strong></td>
+      <td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td>
+      <td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button></div></td>
+    </tr>
+    <tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>맞춤 제안</h4><p>${escapeHtml(lead.offer || '')}</p></section><section><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
   }).join('')}</tbody></table>`;
-  document.querySelectorAll('[data-detail]').forEach(btn => btn.addEventListener('click', () => $(btn.dataset.detail)?.classList.toggle('open')));
+
+  document.querySelectorAll('.lead-check').forEach(input => input.addEventListener('change', () => {
+    const id = input.dataset.id;
+    if (input.checked) state.selected.add(id); else state.selected.delete(id);
+    saveState();
+    renderSummary();
+  }));
+
+  document.querySelectorAll('[data-detail]').forEach(button => button.addEventListener('click', () => {
+    $(button.dataset.detail)?.classList.toggle('open');
+  }));
 }
 
-function updateLead(index, patch, token) { if (token !== state.runToken || !state.data?.leads?.[index]) return; state.data.leads[index] = { ...state.data.leads[index], ...patch }; localStorage.setItem(RESULT_KEY, JSON.stringify(state.data)); render(); }
-async function enrichContact(lead, index, token) { try { const d = await post('/api/contact', { url:lead.url, recommendedRole:lead.recommended_role }, 40000); updateLead(index, { contact:d.contact || null, contacts:d.contacts || [], contact_provider:d.provider || null, contact_status:d.contact?.email ? 'found' : 'failed' }, token); } catch { updateLead(index, { contact_status:'failed' }, token); } }
-async function enrichSample(lead, index, token) { updateLead(index, { sample_status:'pending' }, token); try { const sample = await post('/api/analyze-v2', { clientUrl:lead.url, productHint:lead.product_summary || '', targetNotes:'Only Korean B2B companies that plausibly fit this product. Prefer explicit recent public buying/fit evidence. Do not pad the list.' }, 95000); updateLead(index, { sample, sample_status:'ready' }, token); } catch { updateLead(index, { sample_status:'failed' }, token); } }
+function mergeLeads(incoming = []) {
+  const byId = new Map(state.leads.map(lead => [lead.id || `${lead.campaign}:${lead.domain}`, lead]));
+  const added = [];
+  for (const raw of incoming) {
+    const id = raw.id || `${raw.campaign}:${raw.domain}`;
+    if (!id || byId.has(id)) continue;
+    const lead = { ...raw, id, contact_status: raw.contact_status || 'pending' };
+    byId.set(id, lead);
+    added.push(lead);
+  }
+  state.leads = [...byId.values()].slice(-MAX_BUFFER).reverse();
+  saveState();
+  return added;
+}
 
-async function run() {
-  const token = ++state.runToken;
-  setBusy(true, '후보 찾는 중…');
-  showLoading('오늘 실제로 보낼 회사를 찾는 중입니다.', '후보 → 담당자 → 근거 있는 한국 타깃 순으로 필요한 호출만 실행합니다.');
+function patchLead(id, patch) {
+  const index = state.leads.findIndex(lead => lead.id === id);
+  if (index < 0) return;
+  state.leads[index] = { ...state.leads[index], ...patch };
+  saveState();
+  render();
+}
+
+async function enrichContact(lead) {
+  patchLead(lead.id, { contact_status:'searching' });
   try {
-    if (!await health()) throw new Error('검색 또는 AI 연결 상태를 확인해주세요.');
-    const runNo = Number(localStorage.getItem(RUN_KEY) || '0') + 1;
-    localStorage.setItem(RUN_KEY, String(runNo));
-    const d = await post('/api/discover-v2', { focus:'', excludeCompanies:readRecent(), searchVariant:`${new Date().toISOString().slice(0,10)}-${runNo}` }, 110000);
-    if (token !== state.runToken) return;
-    const leads = (Array.isArray(d?.leads) ? d.leads : []).slice(0, DISCOVER_LIMIT).map(x => ({ ...x, contact:null, contacts:[], contact_status:'pending', sample:null, sample_status:'idle' }));
-    if (!leads.length) throw new Error('이번 탐색에서는 기준을 통과한 회사가 없습니다.');
-    state.data = { generated_at:new Date().toISOString(), leads, meta:d.meta || {} };
-    saveRecent(leads.map(x => x.company));
-    localStorage.setItem(RESULT_KEY, JSON.stringify(state.data));
-    render();
-
-    setBusy(true, '담당자 찾는 중…');
-    await Promise.allSettled(leads.slice(0, CONTACT_LIMIT).map((lead, i) => enrichContact(lead, i, token)));
-    if (token !== state.runToken) return;
-
-    const candidates = state.data.leads.map((lead, index) => ({ lead, index })).filter(x => x.lead.contact?.email && triggerEn(x.lead)).slice(0, READY_LIMIT);
-    if (candidates.length) {
-      setBusy(true, '한국 타깃 검증 중…');
-      await Promise.allSettled(candidates.map(({ lead, index }) => enrichSample(lead, index, token)));
-    }
-    if (token === state.runToken) { setBusy(false); render(); }
-  } catch (e) {
-    if (token === state.runToken) { if (state.data?.leads?.length) { setBusy(false); render(); } else { showError(e.message || '영업 준비에 실패했습니다.'); setBusy(false); } }
+    const result = await post('/api/contact', { url: lead.url, recommendedRole: lead.recommended_role }, 26000);
+    patchLead(lead.id, {
+      contact: result.contact || null,
+      contacts: result.contacts || [],
+      contact_provider: result.provider || null,
+      contact_status: result.contact?.email ? 'found' : 'failed'
+    });
+  } catch (error) {
+    if (!state.auto && /중단/.test(error.message)) return;
+    patchLead(lead.id, { contact_status:'failed' });
   }
 }
 
-$('runBtn').addEventListener('click', run);
-$('diagBtn').addEventListener('click', () => { $('diagPanel').classList.toggle('hidden'); if (!$('diagPanel').classList.contains('hidden')) diagnostics(); });
-if (localStorage.getItem('kpa.v3.version') !== APP_VERSION) { localStorage.removeItem(RESULT_KEY); localStorage.setItem('kpa.v3.version', APP_VERSION); }
-try { const saved = JSON.parse(localStorage.getItem(RESULT_KEY) || 'null'); if (saved?.leads?.length) { state.data = saved; render(); } else render(); } catch { render(); }
+async function mapLimit(items, limit, worker) {
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      await worker(items[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+}
+
+async function runHuntCycle() {
+  state.cycle += 1;
+  saveState();
+  state.statusText = `${campaign().label} 후보 찾는 중`;
+  renderSummary();
+
+  const excludeDomains = state.leads.map(lead => lead.domain).filter(Boolean).slice(0, 180);
+  const result = await post('/api/hunt', {
+    campaign: state.currentCampaign,
+    cycle: state.cycle,
+    excludeDomains
+  }, 22000);
+
+  const added = mergeLeads(result.leads || []);
+  state.statusText = added.length ? `${added.length}개 발견 · 이메일 확인 중` : '새 후보 없음 · 다음 검색에서 다시 시도';
+  render();
+
+  if (added.length) await mapLimit(added.slice(0, 10), 4, enrichContact);
+  state.statusText = added.length ? `${added.length}개 처리 완료` : '';
+  render();
+  return added.length;
+}
+
+async function manualHunt() {
+  if (state.manualRunning || state.auto) return;
+  state.manualRunning = true;
+  updateMainButton();
+  try {
+    if (!await health()) throw new Error('검색 엔진 연결 상태를 확인해주세요.');
+    await runHuntCycle();
+    state.firstRun = true;
+    localStorage.setItem(FIRST_RUN_KEY, '1');
+  } catch (error) {
+    state.statusText = error.message || '사냥 실패';
+  } finally {
+    state.manualRunning = false;
+    render();
+  }
+}
+
+function waitRandom() {
+  const ms = 5000 + Math.floor(Math.random() * 7000);
+  return new Promise(resolve => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      if (!state.auto || Date.now() - started >= ms) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, 250);
+  });
+}
+
+async function startAutoHunt() {
+  if (state.auto) return;
+  state.auto = true;
+  state.autoUntil = Date.now() + AUTO_DURATION_MS;
+  state.statusText = '15분 자동사냥 시작';
+  render();
+
+  while (state.auto && Date.now() < state.autoUntil) {
+    try { await runHuntCycle(); }
+    catch (error) {
+      if (!state.auto) break;
+      state.statusText = `이번 회차 실패 · ${clean(error.message, 100)}`;
+      renderSummary();
+    }
+    if (!state.auto || Date.now() >= state.autoUntil) break;
+    await waitRandom();
+  }
+
+  if (state.auto) {
+    state.auto = false;
+    state.statusText = '15분 자동사냥 완료';
+    render();
+  }
+}
+
+function stopAutoHunt() {
+  state.auto = false;
+  state.autoUntil = 0;
+  abortAll();
+  state.statusText = '자동사냥 중지 · 현재 결과 유지';
+  render();
+}
+
+function handleRunButton() {
+  if (state.auto) return stopAutoHunt();
+  if (state.firstRun) return startAutoHunt();
+  return manualHunt();
+}
+
+function populateCampaigns() {
+  $('campaignSelect').innerHTML = Object.entries(CAMPAIGNS).map(([id, c]) => `<option value="${id}">${c.icon} ${c.label} · ${c.market}</option>`).join('');
+  $('campaignSelect').value = CAMPAIGNS[state.currentCampaign] ? state.currentCampaign : 'kbw';
+  $('campaignSelect').addEventListener('change', event => {
+    state.currentCampaign = event.target.value;
+    saveState();
+    state.statusText = `${campaign().label} 모드`;
+    render();
+  });
+}
+
+function setupSettings() {
+  const input = $('exaKey');
+  input.value = localStorage.getItem(EXA_KEY) || '';
+  $('saveSearchSettings').addEventListener('click', () => {
+    const key = input.value.trim();
+    if (key) localStorage.setItem(EXA_KEY, key); else localStorage.removeItem(EXA_KEY);
+    $('searchSettingsNote').textContent = key ? 'Exa 키 저장됨 · 아직 검색 호출에는 사용하지 않음' : 'Exa 연결 전';
+    diagnostics();
+  });
+  $('searchSettingsNote').textContent = input.value ? 'Exa 키 저장됨 · 아직 검색 호출에는 사용하지 않음' : 'Exa 연결 전';
+}
+
+$('runBtn').addEventListener('click', handleRunButton);
+$('diagBtn').addEventListener('click', () => {
+  $('diagPanel').classList.toggle('hidden');
+  if (!$('diagPanel').classList.contains('hidden')) diagnostics();
+});
+$('settingsBtn').addEventListener('click', () => $('settingsPanel').classList.toggle('hidden'));
+$('clearSelectionBtn').addEventListener('click', () => {
+  state.selected.clear();
+  saveState();
+  render();
+});
+
+if (localStorage.getItem('kpa.hunt.version') !== APP_VERSION) {
+  localStorage.setItem('kpa.hunt.version', APP_VERSION);
+}
+
+populateCampaigns();
+setupSettings();
+render();
 health();
+setInterval(() => { if (state.auto) renderSummary(); }, 1000);
