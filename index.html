@@ -3,37 +3,60 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="description" content="해외 B2B SaaS를 검증해 실제로 보낼 한국 시장 테스트 영업 메일까지 준비하는 내부 영업 도구" />
-  <title>한국 시장 영업 에이전트</title>
+  <meta name="description" content="보유한 제작·개발·영상 역량을 실제 영업 기회로 바꾸는 자동 영업 사냥 도구" />
+  <title>영업 사냥 에이전트</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/tool-v3.css?v=20260729-sendready-v1" />
+  <link rel="stylesheet" href="/tool-v3.css?v=20260730-revenue-hunt-v1" />
 </head>
 <body>
   <div class="shell">
     <header class="topbar">
-      <div class="brand"><div class="logo">K</div><strong>한국 시장 영업 에이전트</strong></div>
+      <div class="brand"><div class="logo">H</div><strong>영업 사냥 에이전트</strong></div>
       <div class="tools">
         <div class="status" id="apiStatus"><span class="dot"></span><span>확인 중</span></div>
+        <button class="ghost" id="settingsBtn" type="button">검색 설정</button>
         <button class="ghost" id="diagBtn" type="button">상태</button>
       </div>
     </header>
+
+    <div id="settingsPanel" class="settings-panel hidden">
+      <div class="setting-field">
+        <label for="engineMode">검색 엔진</label>
+        <select id="engineMode" disabled>
+          <option>현재 엔진 · Tavily</option>
+          <option>Exa · 다음 업데이트에서 연결</option>
+        </select>
+      </div>
+      <div class="setting-field grow">
+        <label for="exaKey">Exa API Key</label>
+        <input id="exaKey" type="password" autocomplete="off" placeholder="키를 미리 저장할 수 있습니다" />
+      </div>
+      <button class="ghost" id="saveSearchSettings" type="button">저장</button>
+      <span class="settings-note" id="searchSettingsNote">Exa 연결 전</span>
+    </div>
 
     <div id="diagPanel" class="hidden"></div>
 
     <main class="main">
       <div class="toolbar">
         <div class="toolbar-title">
-          <h1>오늘 보낼 영업 메일</h1>
-          <small>근거·담당자·한국 타깃이 모두 확인된 회사만 Gmail 발송 준비</small>
+          <h1>오늘 어디서 돈을 찾을까</h1>
+          <small>후보는 바로 쌓고, 이메일이 잡히는 즉시 발송 가능한 상태로 올립니다.</small>
         </div>
-        <button class="primary" id="runBtn" type="button">오늘 영업 준비</button>
+        <div class="toolbar-actions">
+          <select class="campaign-select" id="campaignSelect" aria-label="영업 캠페인"></select>
+          <button class="ghost" id="clearSelectionBtn" type="button">선택 해제</button>
+          <button class="primary hunt-button" id="runBtn" type="button">오늘 영업 준비</button>
+        </div>
       </div>
+
       <div class="summary" id="summary"></div>
       <section class="panel" id="content"></section>
     </main>
   </div>
-  <script src="/app-v3.js?v=20260730-stability-v2" defer></script>
+
+  <script src="/app-v3.js?v=20260730-revenue-hunt-v1" defer></script>
 </body>
 </html>
