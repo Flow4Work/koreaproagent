@@ -16,6 +16,7 @@ const KBW_CURATED = [
   { name:'GRVT', domain:'gr-vt.com', kind:'TGE', signal:'GRVT TGE is scheduled for July 30, 2026 and the project already has meaningful derivatives-market traction.' },
   { name:'MagicBlock', domain:'magicblock.xyz', kind:'TGE', signal:'MagicBlock is active in 2026 builder programs and is tracked for a Q3 2026 token generation event.' },
   { name:'Real Finance', domain:'real.finance', kind:'Launch', signal:'Real Finance is targeting a Q3 2026 mainnet launch and is building institutional RWA infrastructure.' },
+  { name:'Dunamu / Upbit', domain:'dunamu.com', kind:'Korea', signal:'Dunamu operates Upbit and remains one of Korea’s most established digital-asset companies with strong event and community activity.' },
   { name:'Bithumb', domain:'bithumbcorp.com', kind:'Korea', signal:'Bithumb remains one of Korea’s largest active digital-asset exchanges.' },
   { name:'Coinone', domain:'coinone.co.kr', kind:'Korea', signal:'Coinone remains an active Korean exchange with institutional and staking products.' },
   { name:'Korbit', domain:'korbit.co.kr', kind:'Korea', signal:'Korbit remains active and is being repositioned under Mirae Asset’s digital-asset strategy.' },
@@ -141,16 +142,16 @@ async function fetchJson(url, options = {}, timeoutMs = 7500) {
 async function braveSearch(query, key) {
   if (!key) return [];
   const params = new URLSearchParams({ q: clean(query, 390), count:'15', country:'KR', safesearch:'moderate', freshness:'pm' });
-  const data = await fetchJson(`https://api.search.brave.com/res/v1/web/search?${params}`, { headers:{ Accept:'application/json', 'X-Subscription-Token':key } }, 8000);
+  const data = await fetchJson(`https://api.search.brave.com/res/v1/web/search?${params}`, { headers:{ Accept:'application/json', 'X-Subscription-Token':key } }, 7000);
   return (Array.isArray(data?.web?.results) ? data.web.results : []).map((r, i) => ({ title:clean(r.title,260), url:clean(r.url,500), content:clean(r.description,900), score:Math.max(0, 1 - i / 20), published_date:clean(r.age,60), _engine:'brave' })).filter(r => /^https?:\/\//i.test(r.url));
 }
 
 async function jinaRead(url, key) {
   if (!key || !/^https?:\/\//i.test(url)) return '';
-  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 6500);
+  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 6000);
   try {
     const r = await fetch(`https://r.jina.ai/${url}`, { headers:{ Authorization:`Bearer ${key}`, Accept:'text/plain' }, signal:controller.signal, cache:'no-store' });
-    if (!r.ok) return ''; return (await r.text()).slice(0, 24000);
+    if (!r.ok) return ''; return (await r.text()).slice(0, 22000);
   } catch { return ''; } finally { clearTimeout(timer); }
 }
 
@@ -172,19 +173,19 @@ async function dartSignals(key) {
   const end = new Date(); const start = new Date(end.getTime() - 21 * 86400000); const ymd = d => d.toISOString().slice(0,10).replace(/-/g,'');
   const load = async type => {
     const q = new URLSearchParams({ crtfc_key:key, bgn_de:ymd(start), end_de:ymd(end), pblntf_ty:type, page_count:'100', sort:'date', sort_mth:'desc' });
-    const data = await fetchJson(`https://opendart.fss.or.kr/api/list.json?${q}`, {}, 9000);
+    const data = await fetchJson(`https://opendart.fss.or.kr/api/list.json?${q}`, {}, 7500);
     return data?.status === '000' && Array.isArray(data.list) ? data.list : [];
   };
   const settled = await Promise.allSettled([load('B'), load('E')]);
   const rows = settled.flatMap(x => x.status === 'fulfilled' ? x.value : []);
   const signal = /(신규시설투자|타법인.*취득|영업양수|합병|분할|유상증자|단일판매.*공급계약|투자판단|신규사업|사업목적|주요사항|계약체결|자산.*취득)/i;
   const seen = new Set();
-  return rows.filter(r => signal.test(r.report_nm || '')).filter(r => { const k = `${r.corp_name}|${r.report_nm}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 12);
+  return rows.filter(r => signal.test(r.report_nm || '')).filter(r => { const k = `${r.corp_name}|${r.report_nm}`; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 9);
 }
 
 async function resolveOfficial(company) {
   try {
-    const r = await tavilySearch(`${company} 공식 홈페이지 회사`, { maxResults:5, timeRange:'year', excludeDomains:[...ALWAYS_BLOCKED, ...SOURCE_ONLY] });
+    const r = await tavilySearch(`${company} 공식 홈페이지 회사`, { maxResults:4, timeRange:'year', excludeDomains:[...ALWAYS_BLOCKED, ...SOURCE_ONLY] });
     const row = r.results.find(x => !blocked(x.url) && !sourceOnly(x.url));
     if (!row) return null; const domain = rootHost(row.url); return domain ? { domain, url:`https://${domain}/` } : null;
   } catch { return null; }
@@ -195,12 +196,14 @@ function makeLead({ id, campaignId, company, domain, sourceUrl, sourceTitle, pub
   return { id:id || `${campaignId}:${domain}`, campaign:campaignId, campaign_label:c.label, company, domain, url:`https://${domain}/`, source_url:sourceUrl, source_title:sourceTitle, published_date:publishedDate || '', signal:clean(signal,320), score, verified_company:true, verified_by:verifiedBy, quality_reasons:extra.quality_reasons || [], tool_signals:extra.tool_signals || [], recommended_role:c.role, offer:c.koOffer, subject:subjectFor(campaignId, company), message_ko:messageKo(c, company, signal), message_en:messageEn(c, company, signal), contact:null, contact_status:'pending' };
 }
 
-async function rowsToLeads(rows, campaignId, excludes, jinaKey, limit = 12) {
-  const c = CAMPAIGNS[campaignId]; const seen = new Set(); const leads = [];
+async function rowsToLeads(rows, campaignId, excludes, jinaKey, limit = 12, maxJinaReads = 1) {
+  const seen = new Set(); const leads = []; let jinaReads = 0;
   for (const row of rows) {
     if (leads.length >= limit || blocked(row.url)) continue;
     let domain = rootHost(row.url); let company = displayName(row.title, domain); let text = `${row.title || ''} ${row.content || ''}`; let verifiedBy = 'official-domain';
     if (sourceOnly(row.url)) {
+      if (!jinaKey || jinaReads >= maxJinaReads) continue;
+      jinaReads += 1;
       const page = await jinaRead(row.url, jinaKey); if (!page) continue;
       const resolved = resolveLinkFromJina(page, row.url, row.title); if (!resolved) continue;
       domain = resolved.domain; company = resolved.company; text += ` ${page.slice(0,7000)}`; verifiedBy = 'jina-source-resolution';
@@ -215,14 +218,14 @@ async function rowsToLeads(rows, campaignId, excludes, jinaKey, limit = 12) {
 
 function curatedKbwLeads(excludes, cycle) {
   const ordered = KBW_CURATED.slice(cycle % KBW_CURATED.length).concat(KBW_CURATED.slice(0, cycle % KBW_CURATED.length));
-  return ordered.filter(x => !excludes.has(x.domain)).slice(0, 4).map((x, i) => makeLead({ campaignId:'kbw', company:x.name, domain:x.domain, sourceUrl:`https://${x.domain}/`, sourceTitle:`${x.name} · ${x.kind}`, signal:x.signal, score:94 - i * 3, verifiedBy:'curated-kbw-pool', extra:{ quality_reasons:[x.kind === 'Korea' ? '국내 장기 생존 크립토 기업' : '2026 출시/TGE 신호','공식 도메인 고정'], tool_signals:['curated'] } }));
+  return ordered.filter(x => !excludes.has(x.domain)).slice(0, 5).map((x, i) => makeLead({ campaignId:'kbw', company:x.name, domain:x.domain, sourceUrl:`https://${x.domain}/`, sourceTitle:`${x.name} · ${x.kind}`, signal:x.signal, score:96 - i * 3, verifiedBy:'curated-kbw-pool', extra:{ quality_reasons:[x.kind === 'Korea' ? '국내 장기 생존 크립토 기업' : '2026 출시/TGE 신호','공식 도메인 고정'], tool_signals:['curated'] } }));
 }
 
 async function dartLeads(key, excludes, cycle) {
   const rows = await dartSignals(key); if (!rows.length) return [];
-  const slice = rows.slice((cycle * 3) % Math.max(3, rows.length), (cycle * 3) % Math.max(3, rows.length) + 3);
+  const start = (cycle * 2) % Math.max(2, rows.length); const slice = rows.slice(start, start + 2);
   const resolved = await Promise.all(slice.map(async row => ({ row, official:await resolveOfficial(row.corp_name) })));
-  return resolved.filter(x => x.official && !excludes.has(x.official.domain)).map(({ row, official }) => makeLead({ campaignId:'ax', company:clean(row.corp_name,90), domain:official.domain, sourceUrl:`https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(row.rcept_no || '')}`, sourceTitle:clean(row.report_nm,220), publishedDate:clean(row.rcept_dt,30), signal:`OpenDART 최근 공시: ${clean(row.report_nm,180)}`, score:88, verifiedBy:'opendart+official-domain', extra:{ quality_reasons:['최근 주요 공시 신호','공식 홈페이지 확인'], tool_signals:['OpenDART','Tavily'] } }));
+  return resolved.filter(x => x.official && !excludes.has(x.official.domain)).map(({ row, official }) => makeLead({ campaignId:'ax', company:clean(row.corp_name,90), domain:official.domain, sourceUrl:`https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(row.rcept_no || '')}`, sourceTitle:clean(row.report_nm,220), publishedDate:clean(row.rcept_dt,30), signal:`OpenDART 최근 공시: ${clean(row.report_nm,180)}`, score:90, verifiedBy:'opendart+official-domain', extra:{ quality_reasons:['최근 주요 공시 신호','공식 홈페이지 확인'], tool_signals:['OpenDART','Tavily'] } }));
 }
 
 export async function POST(request) {
@@ -234,20 +237,21 @@ export async function POST(request) {
   const variant = VARIANTS[cycle % VARIANTS.length]; const queries = campaign.queries.slice(0,2).map((q,i) => `${q} ${i === cycle % 2 ? variant : ''}`.trim());
 
   try {
+    const dartPromise = campaignId === 'ax' && dartKey ? dartLeads(dartKey, excludes, cycle).catch(() => []) : Promise.resolve([]);
     const search = await tavilySearchMany(queries, { maxResults:10, timeRange:'year', excludeDomains:ALWAYS_BLOCKED, topic:'general' });
-    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, 10);
+    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, 10, 1);
     let braveUsed = false;
     if (leads.length < 6 && braveKey) {
       try {
         const extra = await braveSearch(campaign.queries[cycle % campaign.queries.length], braveKey); braveUsed = true;
-        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), jinaKey, 8); leads.push(...more);
+        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), '', 8, 0); leads.push(...more);
       } catch { /* Tavily results remain usable. */ }
     }
     if (campaignId === 'kbw') leads = [...curatedKbwLeads(new Set([...excludes, ...leads.map(x => x.domain)]), cycle), ...leads];
-    let dartUsed = false;
-    if (campaignId === 'ax' && dartKey) {
-      try { const extra = await dartLeads(dartKey, new Set([...excludes, ...leads.map(x => x.domain)]), cycle); leads = [...extra, ...leads]; dartUsed = true; } catch { /* Web search remains usable. */ }
-    }
+    const dartExtra = await dartPromise;
+    const dartUsed = dartExtra.length > 0;
+    if (campaignId === 'ax' && dartExtra.length) leads = [...dartExtra, ...leads];
+
     const unique = []; const seen = new Set();
     for (const lead of leads.sort((a,b) => b.score - a.score)) { if (!lead.domain || seen.has(lead.domain) || excludes.has(lead.domain)) continue; seen.add(lead.domain); unique.push(lead); if (unique.length >= 12) break; }
     return Response.json({ campaign:campaignId, campaign_label:campaign.label, leads:unique, meta:{ ...search.meta, returned:unique.length, cycle, jina_used:Boolean(jinaKey), brave_used:braveUsed, opendart_used:dartUsed, hard_filter:true } }, { headers:{ 'Cache-Control':'no-store' } });
