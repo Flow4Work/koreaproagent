@@ -1,8 +1,9 @@
 const $ = id => document.getElementById(id);
 
-const APP_VERSION = '20260730-quality-hunt-v2';
+const APP_VERSION = '20260730-quality-hunt-v3';
 const LEADS_KEY = 'kpa.hunt.leads';
 const SELECTED_KEY = 'kpa.hunt.selected';
+const REJECTED_KEY = 'kpa.hunt.rejected';
 const CYCLE_KEY = 'kpa.hunt.cycle';
 const FIRST_RUN_KEY = 'kpa.hunt.firstRun';
 const EXA_KEY = 'kpa.hunt.exaKey';
@@ -37,6 +38,7 @@ if (localStorage.getItem('kpa.hunt.version') !== APP_VERSION) {
 const state = {
   leads: loadJson(LEADS_KEY, []),
   selected: new Set(loadJson(SELECTED_KEY, [])),
+  rejected: new Set(loadJson(REJECTED_KEY, [])),
   controllers: new Set(),
   cycle: Number(localStorage.getItem(CYCLE_KEY) || '0'),
   firstRun: localStorage.getItem(FIRST_RUN_KEY) === '1',
@@ -51,6 +53,7 @@ function saveState() {
   state.leads = state.leads.slice(0, MAX_BUFFER);
   localStorage.setItem(LEADS_KEY, JSON.stringify(state.leads));
   localStorage.setItem(SELECTED_KEY, JSON.stringify([...state.selected]));
+  localStorage.setItem(REJECTED_KEY, JSON.stringify([...state.rejected].slice(-500)));
   localStorage.setItem(CYCLE_KEY, String(state.cycle));
   localStorage.setItem('kpa.hunt.campaign', state.currentCampaign);
 }
@@ -62,7 +65,7 @@ async function readJson(response) {
   return data;
 }
 
-async function post(url, payload, timeout = 35000) {
+async function post(url, payload, timeout = 42000) {
   const controller = new AbortController(); state.controllers.add(controller);
   const timer = setTimeout(() => controller.abort(), timeout);
   try { return await readJson(await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload), cache:'no-store', signal:controller.signal })); }
@@ -89,7 +92,7 @@ async function diagnostics() {
   try {
     const h = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
     const line = (name, ok, detail) => `<div class="diag-row"><b class="${ok ? 'diag-ok' : 'diag-bad'}">${ok ? '✓' : '·'}</b><span>${escapeHtml(name)} · ${escapeHtml(detail)}</span></div>`;
-    panel.innerHTML = `<div class="diag">${line('기본 검색', h.tavilyConfigured, h.tavilyConfigured ? 'Tavily 연결됨' : '설정 필요')}${line('Jina 검증', Boolean(localStorage.getItem(JINA_KEY)), localStorage.getItem(JINA_KEY) ? '기사/행사 페이지에서 실제 회사 도메인 확인' : '키 입력 시 활성화')}${line('Brave 보강', Boolean(localStorage.getItem(BRAVE_KEY)), localStorage.getItem(BRAVE_KEY) ? 'Tavily 후보 부족 시만 사용' : '키 입력 시 활성화')}${line('OpenDART', Boolean(localStorage.getItem(DART_KEY)), localStorage.getItem(DART_KEY) ? 'AX 캠페인 최근 공시 신호 사용' : '키 입력 시 활성화')}${line('Exa', false, '키 저장만 가능 · 아직 미사용')}</div>`;
+    panel.innerHTML = `<div class="diag">${line('기본 검색', h.tavilyConfigured, h.tavilyConfigured ? 'Tavily 연결됨' : '설정 필요')}${line('Jina 검증', Boolean(localStorage.getItem(JINA_KEY)), localStorage.getItem(JINA_KEY) ? '기사/행사에서 실제 회사 도메인 확인' : '키 입력 시 활성화')}${line('Brave 보강', Boolean(localStorage.getItem(BRAVE_KEY)), localStorage.getItem(BRAVE_KEY) ? '후보 부족 시만 사용' : '키 입력 시 활성화')}${line('OpenDART', Boolean(localStorage.getItem(DART_KEY)), localStorage.getItem(DART_KEY) ? 'AX 최근 공시 신호 사용' : '키 입력 시 활성화')}${line('Exa', false, '키 저장만 가능 · 아직 미사용')}${line('제외 학습', state.rejected.size > 0, `${state.rejected.size}개 도메인 재탐색 차단`)}</div>`;
   } catch (e) { panel.innerHTML = `<div class="diag">${escapeHtml(e.message)}</div>`; }
 }
 
@@ -112,7 +115,7 @@ function renderSummary() {
   const selected = state.selected.size;
   const verified = state.leads.filter(x => x.verified_company).length;
   const auto = state.auto ? `<span class="hunt-live">자동사냥 ${remainingText()} 남음</span>` : '';
-  $('summary').innerHTML = `<strong>발송 가능 ${ready}개</strong><span>검증 후보 ${verified}개</span><span>선택 ${selected}개</span>${auto}${state.statusText ? `<span>${escapeHtml(state.statusText)}</span>` : ''}`;
+  $('summary').innerHTML = `<strong>발송 가능 ${ready}개</strong><span>검증 후보 ${verified}개</span><span>선택 ${selected}개</span><span>제외 ${state.rejected.size}개</span>${auto}${state.statusText ? `<span>${escapeHtml(state.statusText)}</span>` : ''}`;
 }
 
 function smallBadges(values = []) { return [...new Set(values.filter(Boolean))].slice(0,4).map(x => `<span class="quality-badge">${escapeHtml(clean(x,42))}</span>`).join(''); }
@@ -125,16 +128,21 @@ function render() {
   $('content').innerHTML = `<table class="lead-table"><thead><tr><th></th><th>캠페인 / 회사</th><th>왜 지금</th><th>담당자 / 이메일</th><th>제안</th><th>상태</th><th>행동</th></tr></thead><tbody>${leads.map((lead,i) => {
     const c = lead.contact || {}, source = safeUrl(lead.source_url), mail = gmailUrl(lead), checked = state.selected.has(lead.id) ? 'checked' : '', detailId = `detail-${i}`;
     const quality = smallBadges([...(lead.quality_reasons || []), ...(lead.tool_signals || [])]);
-    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0} · ${escapeHtml(lead.verified_by || '검증')}</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${c.email ? `<strong>${escapeHtml(c.name || lead.recommended_role || '담당자')}</strong><span>${escapeHtml(c.title || lead.recommended_role || '')}</span><a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(lead.recommended_role || '담당자')}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,190))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>맞춤 제안</h4><p>${escapeHtml(lead.offer || '')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
+    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0} · ${escapeHtml(lead.verified_by || '검증')}</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${c.email ? `<strong>${escapeHtml(c.name || lead.recommended_role || '담당자')}</strong><span>${escapeHtml(c.title || lead.recommended_role || '')}</span><a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(lead.recommended_role || '담당자')}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,190))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button><button class="reject-btn" data-reject="${escapeHtml(lead.id)}">제외</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>맞춤 제안</h4><p>${escapeHtml(lead.offer || '')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
   }).join('')}</tbody></table>`;
 
   document.querySelectorAll('.lead-check').forEach(input => input.addEventListener('change', () => { if (input.checked) state.selected.add(input.dataset.id); else state.selected.delete(input.dataset.id); saveState(); renderSummary(); }));
   document.querySelectorAll('[data-detail]').forEach(b => b.addEventListener('click', () => $(b.dataset.detail)?.classList.toggle('open')));
+  document.querySelectorAll('[data-reject]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.reject; const lead = state.leads.find(x => x.id === id); if (!lead) return;
+    if (lead.domain) state.rejected.add(String(lead.domain).toLowerCase());
+    state.selected.delete(id); state.leads = state.leads.filter(x => x.id !== id); saveState(); render();
+  }));
 }
 
 function mergeLeads(incoming = []) {
   const byId = new Map(state.leads.map(x => [x.id || `${x.campaign}:${x.domain}`,x])); const added = [];
-  for (const raw of incoming) { const id = raw.id || `${raw.campaign}:${raw.domain}`; if (!id || byId.has(id)) continue; const lead = {...raw,id,contact_status:raw.contact_status||'pending'}; byId.set(id,lead); added.push(lead); }
+  for (const raw of incoming) { const id = raw.id || `${raw.campaign}:${raw.domain}`; if (!id || byId.has(id) || state.rejected.has(String(raw.domain || '').toLowerCase())) continue; const lead = {...raw,id,contact_status:raw.contact_status||'pending'}; byId.set(id,lead); added.push(lead); }
   state.leads = [...byId.values()].slice(-MAX_BUFFER).reverse(); saveState(); return added;
 }
 function patchLead(id, patch) { const i = state.leads.findIndex(x => x.id === id); if (i < 0) return; state.leads[i] = {...state.leads[i],...patch}; saveState(); render(); }
@@ -148,7 +156,8 @@ async function mapLimit(items, limit, worker) { let cursor=0; async function run
 
 async function runHuntCycle() {
   state.cycle += 1; saveState(); state.statusText = `${campaign().label} 의미 있는 후보 찾는 중`; renderSummary();
-  const result = await post('/api/hunt',{campaign:state.currentCampaign,cycle:state.cycle,excludeDomains:state.leads.map(x=>x.domain).filter(Boolean).slice(0,180),tools:toolKeys()},35000);
+  const excluded = [...state.leads.map(x=>x.domain).filter(Boolean), ...state.rejected].slice(-500);
+  const result = await post('/api/hunt',{campaign:state.currentCampaign,cycle:state.cycle,excludeDomains:excluded,tools:toolKeys()},42000);
   const added = mergeLeads(result.leads || []);
   const used = [result.meta?.jina_used?'Jina':'',result.meta?.brave_used?'Brave':'',result.meta?.opendart_used?'DART':''].filter(Boolean).join('+');
   state.statusText = added.length ? `${added.length}개 검증 통과${used ? ` · ${used}` : ''} · 이메일 확인 중` : '필수 신호를 통과한 새 후보 없음'; render();
