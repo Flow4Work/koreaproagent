@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const APP_VERSION = '20260729-sendready-v1';
+const APP_VERSION = '20260730-stability-v2';
 const RECENT_KEY = 'kpa.v3.recent';
 const RESULT_KEY = 'kpa.v3.result';
 const RUN_KEY = 'kpa.v3.run';
@@ -21,8 +21,32 @@ function saveRecent(names = []) { const seen = new Set(); const merged = [...nam
 async function readJson(r) { const text = await r.text(); let data = {}; try { data = text ? JSON.parse(text) : {}; } catch { throw new Error(`응답 형식 오류 (HTTP ${r.status})`); } if (!r.ok) throw new Error(`${data.error || `HTTP ${r.status}`}${data.hint ? ` · ${data.hint}` : ''}`); return data; }
 async function post(url, payload, timeout = 110000) { const c = new AbortController(), t = setTimeout(() => c.abort(), timeout); try { return await readJson(await fetch(url, { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(payload), cache:'no-store', signal:c.signal })); } catch (e) { if (e?.name === 'AbortError') throw new Error('처리가 지연되어 이 단계만 중단했습니다.'); throw e; } finally { clearTimeout(t); } }
 
-async function health() { try { const d = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' })); const ok = Boolean(d.aiConnected && d.tavilyConfigured); $('apiStatus').className = `status ${ok ? 'ok' : 'bad'}`; $('apiStatus').innerHTML = `<span class="dot"></span><span>${ok ? '정상' : '확인 필요'}</span>`; return ok; } catch { $('apiStatus').className = 'status bad'; $('apiStatus').innerHTML = '<span class="dot"></span><span>오류</span>'; return false; } }
-async function diagnostics() { const panel = $('diagPanel'); panel.classList.remove('hidden'); panel.innerHTML = '<div class="diag">확인 중…</div>'; try { const h = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' })); const line = (name, ok, detail) => `<div class="diag-row"><b class="${ok ? 'diag-ok' : 'diag-bad'}">${ok ? '✓' : '✕'}</b><span>${escapeHtml(name)} · ${escapeHtml(detail)}</span></div>`; panel.innerHTML = `<div class="diag">${line('웹 검색', h.tavilyConfigured, h.tavilyConfigured ? '정상' : '설정 필요')}${line('AI 분석', h.aiConnected, h.aiModel || '연결 필요')}${line('연락처 탐색', true, '공개 웹/연결된 공급자')}</div>`; } catch (e) { panel.innerHTML = `<div class="diag">${escapeHtml(e.message)}</div>`; } }
+async function health() {
+  try {
+    const d = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
+    const ok = Boolean(d.ok && d.inferenceSmokeOk && d.tavilyConfigured);
+    $('apiStatus').className = `status ${ok ? 'ok' : 'bad'}`;
+    $('apiStatus').innerHTML = `<span class="dot"></span><span>${ok ? '정상' : '확인 필요'}</span>`;
+    return ok;
+  } catch {
+    $('apiStatus').className = 'status bad';
+    $('apiStatus').innerHTML = '<span class="dot"></span><span>오류</span>';
+    return false;
+  }
+}
+
+async function diagnostics() {
+  const panel = $('diagPanel');
+  panel.classList.remove('hidden');
+  panel.innerHTML = '<div class="diag">확인 중…</div>';
+  try {
+    const h = await readJson(await fetch(`/api/health?t=${Date.now()}`, { cache:'no-store' }));
+    const line = (name, ok, detail) => `<div class="diag-row"><b class="${ok ? 'diag-ok' : 'diag-bad'}">${ok ? '✓' : '✕'}</b><span>${escapeHtml(name)} · ${escapeHtml(detail)}</span></div>`;
+    panel.innerHTML = `<div class="diag">${line('웹 검색', h.tavilyConfigured, h.tavilyConfigured ? '정상' : '설정 필요')}${line('AI 실제 추론', h.inferenceSmokeOk, h.inferenceSmokeModel || '실패')}${line('Groq fallback', h.groqConfigured, h.groqConfigured ? '설정됨' : '미설정')}${line('연락처 탐색', true, '공개 웹/연결된 공급자')}</div>`;
+  } catch (e) {
+    panel.innerHTML = `<div class="diag">${escapeHtml(e.message)}</div>`;
+  }
+}
 function setBusy(on, text = '') { state.busy = on; $('runBtn').disabled = on; $('runBtn').textContent = on ? (text || '준비 중…') : '오늘 영업 준비'; }
 function showLoading(title, sub) { $('content').innerHTML = `<div class="loading"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(sub)}</span></div>`; $('summary').innerHTML = ''; }
 function showError(msg) { $('content').innerHTML = `<div class="error">${escapeHtml(msg)}</div>`; $('summary').innerHTML = ''; }
@@ -80,7 +104,7 @@ function render() {
 
 function updateLead(index, patch, token) { if (token !== state.runToken || !state.data?.leads?.[index]) return; state.data.leads[index] = { ...state.data.leads[index], ...patch }; localStorage.setItem(RESULT_KEY, JSON.stringify(state.data)); render(); }
 async function enrichContact(lead, index, token) { try { const d = await post('/api/contact', { url:lead.url, recommendedRole:lead.recommended_role }, 40000); updateLead(index, { contact:d.contact || null, contacts:d.contacts || [], contact_provider:d.provider || null, contact_status:d.contact?.email ? 'found' : 'failed' }, token); } catch { updateLead(index, { contact_status:'failed' }, token); } }
-async function enrichSample(lead, index, token) { updateLead(index, { sample_status:'pending' }, token); try { const sample = await post('/api/analyze-v2', { clientUrl:lead.url, productHint:lead.product_summary || '', targetNotes:'Only Korean B2B companies that plausibly fit this product. Prefer explicit recent public buying/fit evidence. Do not pad the list.' }, 75000); updateLead(index, { sample, sample_status:'ready' }, token); } catch { updateLead(index, { sample_status:'failed' }, token); } }
+async function enrichSample(lead, index, token) { updateLead(index, { sample_status:'pending' }, token); try { const sample = await post('/api/analyze-v2', { clientUrl:lead.url, productHint:lead.product_summary || '', targetNotes:'Only Korean B2B companies that plausibly fit this product. Prefer explicit recent public buying/fit evidence. Do not pad the list.' }, 95000); updateLead(index, { sample, sample_status:'ready' }, token); } catch { updateLead(index, { sample_status:'failed' }, token); } }
 
 async function run() {
   const token = ++state.runToken;
@@ -90,7 +114,7 @@ async function run() {
     if (!await health()) throw new Error('검색 또는 AI 연결 상태를 확인해주세요.');
     const runNo = Number(localStorage.getItem(RUN_KEY) || '0') + 1;
     localStorage.setItem(RUN_KEY, String(runNo));
-    const d = await post('/api/discover-v2', { focus:'', excludeCompanies:readRecent(), searchVariant:`${new Date().toISOString().slice(0,10)}-${runNo}` }, 80000);
+    const d = await post('/api/discover-v2', { focus:'', excludeCompanies:readRecent(), searchVariant:`${new Date().toISOString().slice(0,10)}-${runNo}` }, 110000);
     if (token !== state.runToken) return;
     const leads = (Array.isArray(d?.leads) ? d.leads : []).slice(0, DISCOVER_LIMIT).map(x => ({ ...x, contact:null, contacts:[], contact_status:'pending', sample:null, sample_status:'idle' }));
     if (!leads.length) throw new Error('이번 탐색에서는 기준을 통과한 회사가 없습니다.');
