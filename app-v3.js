@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 
-const APP_VERSION = '20260730-reply-first-v4';
+const APP_VERSION = '20260730-win-filter-v1';
 const LEADS_KEY = 'kpa.hunt.leads';
 const SELECTED_KEY = 'kpa.hunt.selected';
 const REJECTED_KEY = 'kpa.hunt.rejected';
@@ -15,7 +15,7 @@ const MAX_BUFFER = 250;
 const AUTO_DURATION_MS = 15 * 60 * 1000;
 
 const CAMPAIGNS = {
-  kbw: { label:'KBW 단체복', icon:'👕', market:'해외→한국', message:'en' },
+  kbw: { label:'KBW 단체복', icon:'👕', market:'해외→한국', message:'auto' },
   apparel: { label:'국내 단체복', icon:'👕', market:'한국', message:'ko' },
   ax: { label:'AX PoC', icon:'🤖', market:'한국', message:'ko' },
   video: { label:'영상 제작', icon:'🎬', market:'한국', message:'ko' },
@@ -118,15 +118,22 @@ async function diagnostics() {
   } catch (e) { panel.innerHTML = `<div class="diag">${escapeHtml(e.message)}</div>`; }
 }
 
+function leadLanguage(lead = {}) {
+  const configured = CAMPAIGNS[lead.campaign] || CAMPAIGNS.kbw;
+  if (lead.outreach_language === 'ko' || lead.outreach_language === 'en') return lead.outreach_language;
+  return configured.message === 'ko' ? 'ko' : 'en';
+}
+
 function leadMessage(lead) {
-  const cfg = CAMPAIGNS[lead.campaign] || CAMPAIGNS.kbw;
-  let message = cfg.message === 'en' ? (lead.message_en || '') : (lead.message_ko || lead.message_en || '');
-  if (cfg.message === 'en') {
+  const lang = leadLanguage(lead);
+  let message = lang === 'ko' ? (lead.message_ko || lead.message_en || '') : (lead.message_en || lead.message_ko || '');
+  if (lang === 'en') {
     const first = contactFirstName(lead?.contact || {});
     if (first) message = message.replace(/^Hi,\s*/i, `Hi ${first},\n\n`);
   }
   return message;
 }
+
 function usableEmail(lead) {
   const email = clean(lead?.contact?.email, 220).toLowerCase();
   if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)) return false;
@@ -135,14 +142,17 @@ function usableEmail(lead) {
   const companyDomain = rootHost(lead?.domain || lead?.url || '');
   return Boolean(companyDomain && (emailDomain === companyDomain || emailDomain.endsWith(`.${companyDomain}`)));
 }
+
 function leadReady(lead) {
   return Boolean(lead?.verified_company && Number(lead?.score || 0) >= 70 && usableEmail(lead) && leadMessage(lead).length >= 120);
 }
+
 function gmailUrl(lead) {
   const email = lead?.contact?.email, subject = clean(lead.subject,180), body = leadMessage(lead);
   if (!leadReady(lead) || !email || !subject || !body) return '';
   return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(email)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
+
 function stageText(lead) {
   if (leadReady(lead)) return '발송 준비';
   if (lead?.contact?.email && !usableEmail(lead)) return '이메일 검증 필요';
@@ -150,6 +160,7 @@ function stageText(lead) {
   if (lead.contact_status === 'failed') return '이메일 미확보';
   return lead.verified_company ? '검증 후보' : '후보';
 }
+
 function remainingText() {
   if (!state.auto || !state.autoUntil) return '';
   const left = Math.max(0,state.autoUntil-Date.now());
@@ -175,19 +186,48 @@ function renderSummary() {
   $('summary').innerHTML = `<strong>발송 가능 ${counts.ready}개${deltaHtml(readyDelta)}</strong><span>검증 후보 ${counts.verified}개${deltaHtml(verifiedDelta)}</span><span>선택 ${selected}개</span><span>제외 ${state.rejected.size}개</span>${auto}${state.statusText ? `<span>${escapeHtml(state.statusText)}</span>` : ''}`;
 }
 
-function smallBadges(values = []) { return [...new Set(values.filter(Boolean))].slice(0,4).map(x => `<span class="quality-badge">${escapeHtml(clean(x,42))}</span>`).join(''); }
+function smallBadges(values = []) { return [...new Set(values.filter(Boolean))].slice(0,5).map(x => `<span class="quality-badge">${escapeHtml(clean(x,42))}</span>`).join(''); }
+
+function uniqueContacts(lead = {}) {
+  const rows = [lead.contact, ...(Array.isArray(lead.contacts) ? lead.contacts : [])].filter(Boolean);
+  const seen = new Set();
+  return rows.filter(c => {
+    const key = clean(c.email || c.linkedinUrl || c.name, 220).toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key); return true;
+  }).slice(0,3);
+}
+
+function contactHtml(lead = {}) {
+  const contacts = uniqueContacts(lead);
+  if (!contacts.length) {
+    const role = clean(lead.recommended_role || '담당자', 120);
+    return `<strong>${escapeHtml(role)}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`;
+  }
+  return contacts.map((c, index) => {
+    const role = clean(c.title || lead.recommended_role || '담당자', 120);
+    const person = contactName(c);
+    const label = contacts.length > 1 ? `${index + 1}순위 · ` : '';
+    return `<strong>${escapeHtml(`${label}${person || role}`)}</strong>${person && role && person !== role ? `<span>${escapeHtml(role)}</span>` : ''}${c.email ? `<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : ''}`;
+  }).join('');
+}
 
 function render() {
   renderSummary(); updateMainButton();
-  const leads = [...state.leads].sort((a,b) => Number(state.selected.has(b.id))-Number(state.selected.has(a.id)) || Number(leadReady(b))-Number(leadReady(a)) || (b.score||0)-(a.score||0));
+  const leads = [...state.leads].sort((a,b) =>
+    Number(state.selected.has(b.id))-Number(state.selected.has(a.id)) ||
+    Number(leadReady(b))-Number(leadReady(a)) ||
+    (Number(b.sales_priority || b.score || 0)-Number(a.sales_priority || a.score || 0))
+  );
   if (!leads.length) { $('content').innerHTML = '<div class="empty"><strong>아직 잡힌 후보가 없습니다.</strong><span>캠페인을 고르고 오늘 영업 준비를 눌러 시작합니다.</span></div>'; return; }
 
   $('content').innerHTML = `<table class="lead-table"><thead><tr><th></th><th>캠페인 / 회사</th><th>왜 지금</th><th>담당자 / 이메일</th><th>제안</th><th>상태</th><th>행동</th></tr></thead><tbody>${leads.map((lead,i) => {
-    const c = lead.contact || {}, source = safeUrl(lead.source_url), mail = gmailUrl(lead), checked = state.selected.has(lead.id) ? 'checked' : '', detailId = `detail-${i}`;
+    const source = safeUrl(lead.source_url), mail = gmailUrl(lead), checked = state.selected.has(lead.id) ? 'checked' : '', detailId = `detail-${i}`;
     const quality = smallBadges([...(lead.quality_reasons || []), ...(lead.tool_signals || [])]);
-    const role = clean(c.title || lead.recommended_role || '담당자', 120); const person = contactName(c);
-    const contactBlock = c.email ? `<strong>${escapeHtml(person || role)}</strong>${person && role && person !== role ? `<span>${escapeHtml(role)}</span>` : ''}<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(role)}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`;
-    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0} · ${escapeHtml(lead.verified_by || '검증')}</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${contactBlock}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,220))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button><button class="reject-btn" data-reject="${escapeHtml(lead.id)}">제외</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>첫 메일 목표</h4><p>${escapeHtml(lead.reply_question || '상대가 부담 없이 한 줄 답장하게 만들기')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
+    const language = leadLanguage(lead) === 'ko' ? '한글' : '영문';
+    const priority = lead.win_label ? ` · ${lead.win_label}` : '';
+    const contactBlock = contactHtml(lead);
+    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0}${priority} · ${language} 메일</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${contactBlock}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,220))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button><button class="reject-btn" data-reject="${escapeHtml(lead.id)}">제외</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>첫 메일 목표</h4><p>${escapeHtml(lead.reply_question || '상대가 부담 없이 한 줄 답장하게 만들기')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
   }).join('')}</tbody></table>`;
 
   document.querySelectorAll('.lead-check').forEach(input => input.addEventListener('change', () => { if (input.checked) state.selected.add(input.dataset.id); else state.selected.delete(input.dataset.id); saveState(); renderSummary(); }));
@@ -204,8 +244,11 @@ function patchLead(id, patch) { const i = state.leads.findIndex(x => x.id === id
 
 async function enrichContact(lead) {
   patchLead(lead.id,{contact_status:'searching'});
-  try { const r = await post('/api/contact',{url:lead.url,recommendedRole:lead.recommended_role},26000); patchLead(lead.id,{contact:r.contact||null,contacts:r.contacts||[],contact_provider:r.provider||null,contact_status:r.contact?.email?'found':'failed'}); }
-  catch (e) { if (!state.auto && /중단/.test(e.message)) return; patchLead(lead.id,{contact_status:'failed'}); }
+  try {
+    const r = await post('/api/contact',{url:lead.url,recommendedRole:lead.recommended_role,roleTargets:lead.role_targets || []},32000);
+    const primary = r.contact || (Array.isArray(r.contacts) ? r.contacts.find(x => x?.email) : null) || null;
+    patchLead(lead.id,{contact:primary,contacts:r.contacts||[],contact_provider:r.provider||null,contact_status:primary?.email?'found':'failed'});
+  } catch (e) { if (!state.auto && /중단/.test(e.message)) return; patchLead(lead.id,{contact_status:'failed'}); }
 }
 async function mapLimit(items, limit, worker) { let cursor=0; async function run(){ while(cursor<items.length){ const i=cursor++; await worker(items[i],i); } } await Promise.all(Array.from({length:Math.min(limit,items.length)},run)); }
 
@@ -215,7 +258,7 @@ async function runHuntCycle() {
   const result = await post('/api/hunt',{campaign:state.currentCampaign,cycle:state.cycle,excludeDomains:excluded,tools:toolKeys()},42000);
   const added = mergeLeads(result.leads || []);
   const used = [result.meta?.exa_used?'Exa':'',result.meta?.jina_used?'Jina':'',result.meta?.brave_used?'Brave':'',result.meta?.opendart_used?'DART':''].filter(Boolean).join('+');
-  state.statusText = added.length ? `${added.length}개 검증 통과${used ? ` · ${used}` : ''} · 이메일 확인 중` : '필수 신호를 통과한 새 후보 없음'; render();
+  state.statusText = added.length ? `${added.length}개 검증 통과${used ? ` · ${used}` : ''} · 이메일 1~3개 확인 중` : '필수 신호를 통과한 새 후보 없음'; render();
   if (added.length) await mapLimit(added.slice(0,10),4,enrichContact);
   state.statusText = added.length ? `${added.length}개 처리 완료` : ''; render(); return added.length;
 }
