@@ -10,16 +10,36 @@ export async function POST(request) {
 
   const url = clean(body.url, 500);
   const recommendedRole = clean(body.recommendedRole, 120) || 'Head of Sales';
+  const roleTargets = Array.isArray(body.roleTargets) ? body.roleTargets.map(role => clean(role, 120)).filter(Boolean) : [];
+  const roles = [...new Set([recommendedRole, ...roleTargets])].slice(0, 3);
   if (!url) return Response.json({ error: '회사 URL이 필요합니다.' }, { status: 400 });
 
   try {
-    const result = await findContacts(url, { maxContacts: 8, recommendedRole });
-    const contacts = normalizeContacts(result?.emails || [], recommendedRole);
+    const contacts = [];
+    const seen = new Set();
+    const providers = [];
+    const attempts = [];
+
+    for (const role of roles) {
+      if (contacts.length >= 3) break;
+      const result = await findContacts(url, { maxContacts: 6, recommendedRole: role });
+      if (result?.provider) providers.push(result.provider);
+      for (const attempt of result?.attempts || []) attempts.push({ ...attempt, role });
+      for (const contact of normalizeContacts(result?.emails || [], role)) {
+        const key = clean(contact.email || contact.linkedinUrl || contact.name, 220).toLowerCase();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        contacts.push(contact);
+        if (contacts.length >= 3) break;
+      }
+    }
+
+    contacts.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
     return Response.json({
       contact: contacts[0] || null,
       contacts: contacts.slice(0, 3),
-      provider: result?.provider || null,
-      attempts: result?.attempts || []
+      provider: [...new Set(providers)].join('+') || null,
+      attempts
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
     return Response.json({ error: safeError(error?.message || error) }, { status: 502 });
