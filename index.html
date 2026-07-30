@@ -38,7 +38,7 @@
       <div class="toolbar">
         <div class="toolbar-title">
           <h1>오늘 어디서 돈을 찾을까</h1>
-          <small>필수 구매 신호를 통과한 실제 회사만 쌓고, 이메일이 잡히는 즉시 발송 상태로 올립니다.</small>
+          <small>구매 신호와 실제 담당자를 찾고, 상대가 부담 없이 답할 수 있는 첫 메일까지 만듭니다.</small>
         </div>
         <div class="toolbar-actions">
           <select class="campaign-select" id="campaignSelect" aria-label="영업 캠페인"></select>
@@ -61,12 +61,12 @@
         dartKey: 'kpa.hunt.dartKey'
       };
 
-      // One-time migration: remove stale lead/message data from the pre-v4 hunt,
+      // One-time migration: remove stale pre reply-first leads/messages,
       // but never remove user-entered API keys or rejected-domain feedback.
       const migrationKey = 'kpa.hunt.messageSchema';
-      if (localStorage.getItem(migrationKey) !== 'v4') {
+      if (localStorage.getItem(migrationKey) !== 'v5') {
         ['kpa.hunt.leads','kpa.hunt.selected','kpa.hunt.cycle','kpa.hunt.firstRun','kpa.hunt.stopped'].forEach(key => localStorage.removeItem(key));
-        localStorage.setItem(migrationKey, 'v4');
+        localStorage.setItem(migrationKey, 'v5');
       }
 
       const restoreAndAutosave = () => {
@@ -86,6 +86,6 @@
       else restoreAndAutosave();
     })();
   </script>
-  <script src="/app-v3.js?v=20260730-quality-hunt-v5" defer></script>
+  <script src="/app-v3.js?v=20260730-reply-first-v6" defer></script>
 </body>
 </html>
