@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 
-const APP_VERSION = '20260730-quality-hunt-v3';
+const APP_VERSION = '20260730-reply-first-v4';
 const LEADS_KEY = 'kpa.hunt.leads';
 const SELECTED_KEY = 'kpa.hunt.selected';
 const REJECTED_KEY = 'kpa.hunt.rejected';
@@ -34,6 +34,8 @@ function rootHost(v = '') {
   if (/^(?:[^.]+\.)?(?:co|or|go|ac)\.kr$/.test(three)) return three;
   return p.slice(-2).join('.');
 }
+function contactName(contact = {}) { return clean(contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`,120); }
+function contactFirstName(contact = {}) { const first = clean(contact.first_name || '',60); if (first) return first; return clean(contactName(contact).split(/\s+/)[0] || '',60); }
 
 if (localStorage.getItem('kpa.hunt.version') !== APP_VERSION) {
   localStorage.removeItem(LEADS_KEY);
@@ -118,7 +120,12 @@ async function diagnostics() {
 
 function leadMessage(lead) {
   const cfg = CAMPAIGNS[lead.campaign] || CAMPAIGNS.kbw;
-  return cfg.message === 'en' ? (lead.message_en || '') : (lead.message_ko || lead.message_en || '');
+  let message = cfg.message === 'en' ? (lead.message_en || '') : (lead.message_ko || lead.message_en || '');
+  if (cfg.message === 'en') {
+    const first = contactFirstName(lead?.contact || {});
+    if (first) message = message.replace(/^Hi,\s*/i, `Hi ${first},\n\n`);
+  }
+  return message;
 }
 function usableEmail(lead) {
   const email = clean(lead?.contact?.email, 220).toLowerCase();
@@ -178,9 +185,9 @@ function render() {
   $('content').innerHTML = `<table class="lead-table"><thead><tr><th></th><th>캠페인 / 회사</th><th>왜 지금</th><th>담당자 / 이메일</th><th>제안</th><th>상태</th><th>행동</th></tr></thead><tbody>${leads.map((lead,i) => {
     const c = lead.contact || {}, source = safeUrl(lead.source_url), mail = gmailUrl(lead), checked = state.selected.has(lead.id) ? 'checked' : '', detailId = `detail-${i}`;
     const quality = smallBadges([...(lead.quality_reasons || []), ...(lead.tool_signals || [])]);
-    const role = clean(c.title || lead.recommended_role || '담당자', 120); const person = clean(c.name || '', 120);
+    const role = clean(c.title || lead.recommended_role || '담당자', 120); const person = contactName(c);
     const contactBlock = c.email ? `<strong>${escapeHtml(person || role)}</strong>${person && role && person !== role ? `<span>${escapeHtml(role)}</span>` : ''}<a href="mailto:${escapeHtml(c.email)}">${escapeHtml(c.email)}</a>` : `<strong>${escapeHtml(role)}</strong><small class="pending">${escapeHtml(stageText(lead))}</small>`;
-    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0} · ${escapeHtml(lead.verified_by || '검증')}</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${contactBlock}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,220))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button><button class="reject-btn" data-reject="${escapeHtml(lead.id)}">제외</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>맞춤 제안</h4><p>${escapeHtml(lead.offer || '')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
+    return `<tr class="data-row ${leadReady(lead) ? 'ready-row' : ''}"><td class="select-cell"><input class="lead-check" type="checkbox" data-id="${escapeHtml(lead.id)}" ${checked}></td><td class="company"><span class="campaign-badge">${escapeHtml(lead.campaign_label || lead.campaign)}</span><strong>${escapeHtml(lead.company)}</strong><a href="${escapeHtml(safeUrl(lead.url))}" target="_blank" rel="noopener noreferrer">${escapeHtml(lead.domain || host(lead.url))}</a><p>적합도 ${Number(lead.score)||0} · ${escapeHtml(lead.verified_by || '검증')}</p><div class="quality-badges">${quality}</div></td><td class="signal"><strong>${escapeHtml(clean(lead.signal,300))}</strong>${source ? `<a class="source-link" href="${escapeHtml(source)}" target="_blank" rel="noopener noreferrer">근거 보기</a>` : ''}</td><td class="contact">${contactBlock}</td><td class="offer"><strong>${escapeHtml(clean(lead.offer,220))}</strong></td><td><span class="stage ${leadReady(lead) ? 'stage-ready' : ''}">${escapeHtml(stageText(lead))}</span></td><td><div class="actions">${mail ? `<a class="mail-btn" href="${escapeHtml(mail)}" target="_blank" rel="noopener noreferrer">Gmail</a>` : ''}<button class="detail-btn" data-detail="${detailId}">상세</button><button class="reject-btn" data-reject="${escapeHtml(lead.id)}">제외</button></div></td></tr><tr class="detail-row"><td colspan="7"><div class="detail" id="${detailId}"><section><h4>왜 통과했나</h4><p>${escapeHtml((lead.quality_reasons || []).join(' · ') || lead.verified_by || '')}</p></section><section><h4>첫 메일 목표</h4><p>${escapeHtml(lead.reply_question || '상대가 부담 없이 한 줄 답장하게 만들기')}</p></section><section class="mail-preview"><h4>보낼 메시지</h4><pre>${escapeHtml(leadMessage(lead))}</pre></section></div></td></tr>`;
   }).join('')}</tbody></table>`;
 
   document.querySelectorAll('.lead-check').forEach(input => input.addEventListener('change', () => { if (input.checked) state.selected.add(input.dataset.id); else state.selected.delete(input.dataset.id); saveState(); renderSummary(); }));
