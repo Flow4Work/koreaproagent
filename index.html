@@ -52,6 +52,31 @@
     </main>
   </div>
 
+  <script>
+    (() => {
+      const persistentKeys = {
+        exaKey: 'kpa.hunt.exaKey',
+        jinaKey: 'kpa.hunt.jinaKey',
+        braveKey: 'kpa.hunt.braveKey',
+        dartKey: 'kpa.hunt.dartKey'
+      };
+      const restoreAndAutosave = () => {
+        for (const [id, storageKey] of Object.entries(persistentKeys)) {
+          const input = document.getElementById(id);
+          if (!input) continue;
+          const saved = localStorage.getItem(storageKey);
+          if (saved) input.value = saved;
+          input.addEventListener('input', () => {
+            const value = input.value.trim();
+            if (value) localStorage.setItem(storageKey, value);
+            else localStorage.removeItem(storageKey);
+          });
+        }
+      };
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', restoreAndAutosave);
+      else restoreAndAutosave();
+    })();
+  </script>
   <script src="/app-v3.js?v=20260730-quality-hunt-v4" defer></script>
 </body>
 </html>
