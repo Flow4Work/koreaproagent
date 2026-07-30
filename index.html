@@ -61,12 +61,12 @@
         dartKey: 'kpa.hunt.dartKey'
       };
 
-      // One-time migration: remove stale pre reply-first leads/messages,
+      // One-time migration: remove stale leads/messages,
       // but never remove user-entered API keys or rejected-domain feedback.
       const migrationKey = 'kpa.hunt.messageSchema';
-      if (localStorage.getItem(migrationKey) !== 'v5') {
+      if (localStorage.getItem(migrationKey) !== 'v6') {
         ['kpa.hunt.leads','kpa.hunt.selected','kpa.hunt.cycle','kpa.hunt.firstRun','kpa.hunt.stopped'].forEach(key => localStorage.removeItem(key));
-        localStorage.setItem(migrationKey, 'v5');
+        localStorage.setItem(migrationKey, 'v6');
       }
 
       const restoreAndAutosave = () => {
@@ -86,7 +86,7 @@
       else restoreAndAutosave();
     })();
   </script>
-  <script src="/app-v3.js?v=20260730-reply-first-v6" defer></script>
+  <script src="/app-v3.js?v=20260730-win-filter-v1" defer></script>
   <script src="/hunt-ui.js?v=20260730-hunt-hype-v1" defer></script>
 </body>
 </html>
