@@ -51,14 +51,14 @@
 
   async function gmailStatus(force = false) {
     if (statusCache && !force) return statusCache;
-    const response = await fetch(`/api/email/status?t=${Date.now()}`, { cache:'no-store', credentials:'same-origin' });
+    const response = await fetch(`/api/gmail?action=status&t=${Date.now()}`, { cache:'no-store', credentials:'same-origin' });
     statusCache = await response.json().catch(() => ({ configured:false, connected:false }));
     return statusCache;
   }
 
   function connectGmail() {
     const returnTo = `${location.pathname}${location.search}`;
-    location.href = `/api/email/auth-start?return=${encodeURIComponent(returnTo)}`;
+    location.href = `/api/gmail?action=auth&return=${encodeURIComponent(returnTo)}`;
   }
 
   function showOAuthResult() {
@@ -111,7 +111,7 @@
     anchor.classList.add('gmail-sending');
 
     try {
-      const response = await fetch('/api/email/send', {
+      const response = await fetch('/api/gmail', {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         credentials:'same-origin',
