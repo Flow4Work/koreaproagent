@@ -11,7 +11,7 @@ const SOURCE_ONLY = [
   'venturesquare.net','besuccess.com','startuprecipe.co.kr','eventbrite.com','meetup.com','festa.io','onoffmix.com',
   'event-us.kr','icoanalytics.org','coinmarketcap.com','coingecko.com','newsis.com','yna.co.kr','mk.co.kr','hankyung.com',
   'cryptorank.io','coinpedia.org','iq.wiki','ninjapromo.io','fintechnews.hk','gfma.org','coinmarketcal.com','beincrypto.com',
-  'koreablockchainweek.com'
+  'koreablockchainweek.com','lu.ma','luma.com','bitcoin.com'
 ];
 
 const LARGE_KBW_DOMAINS = new Set([
@@ -22,12 +22,16 @@ const CAMPAIGNS = {
   kbw: {
     label: 'KBW 단체복', market: 'global-to-korea',
     queries: [
-      '2026 Korea Blockchain Week sponsor speaker partner side event company protocol Seoul',
-      '2026 KBW Seoul side event host meetup booth sponsor startup protocol community'
+      '2026 Korea Blockchain Week sponsor speaker partner side event protocol startup Seoul',
+      'site:lu.ma 2026 Seoul KBW crypto web3 side event meetup protocol startup',
+      '2026 upcoming TGE token generation mainnet launch emerging crypto protocol startup',
+      '2026 web3 startup funding partnership fast growing protocol community launch',
+      '2026 crypto project Korea expansion Korean community exchange listing Seoul Asia partnership',
+      '2026 KBW Seoul founders team attending networking protocol community no booth'
     ],
-    exaQuery: 'Real companies, startups and web3 teams with a concrete Korea Blockchain Week 2026 or Seoul event signal: sponsor, speaker, partner, side event, meetup, booth, activation or community event. Prefer reachable small and mid-sized teams with identifiable company domains and exclude generic crypto topic pages.',
-    signal: /(kbw|korea blockchain week|seoul|tge|token generation|mainnet|side event|meetup|sponsor|community event|conference|summit|launch)/i,
-    intent: /(host|hosting|organizer|organizing|sponsor|sponsoring|side event|meetup|booth|launch|tge|mainnet|activation|서울|행사|주최|스폰서|밋업|출시)/i,
+    exaQuery: 'Reachable emerging web3 companies and protocols that are strong sales prospects around Korea Blockchain Week 2026: confirmed Seoul or KBW participation, Luma side events, upcoming TGE or mainnet launch, recent funding or rapid momentum, or active Korea/Asia expansion. Exclude generic crypto pages, media, directories, and major top-market-cap projects.',
+    signal: /(kbw|korea blockchain week|seoul|korea|tge|token generation|mainnet|side event|meetup|sponsor|community|conference|summit|launch|funding|raised|partnership|testnet|airdrop|listing|expansion)/i,
+    intent: /(host|hosting|organizer|sponsor|side event|meetup|booth|launch|tge|mainnet|activation|funding|raised|partner|listing|expansion|attend|서울|한국|행사|주최|스폰서|밋업|출시|투자|파트너|상장|확장)/i,
     koOffer: '서울 현지에서 티셔츠·후디·스태프 의류를 제작해 호텔·사무실·행사장으로 납품',
     enOffer: 'local Seoul production for team shirts, staff tees, hoodies and event merch with delivery to your hotel, office or venue'
   },
@@ -65,22 +69,34 @@ const CAMPAIGNS = {
   }
 };
 
-const VARIANTS = ['recent announcement upcoming event','small team startup launch partner','2026 expansion community activation'];
+const VARIANTS = ['recent announcement upcoming event','small team startup launch partner','2026 expansion community activation','funding tge emerging protocol'];
 const AI_VENDOR = /(ai 솔루션|ai 전문|생성형 ai 스타트업|ai platform|ai company|인공지능 전문기업|automation vendor|rpa 솔루션)/i;
 const AX_BUYER = /(고객센터|고객지원|물류|제조|유통|커머스|여행|교육|금융|보험|병원|프랜차이즈|erp|운영|영업|백오피스|스마트공장|생산)/i;
 const SOURCE_TITLE = /(top\s*\d+|best .*events|events? to attend|conference[s]? .*2026|event calendar|global adoption index|report|guide|list of|news roundup|press release|pr 2026|organizations?\s*\|)/i;
-const SMALL_TEAM_SIGNAL = /(startup|early[- ]stage|seed|series\s*[ab]|emerging|independent|protocol|project team|small team|community-led|스타트업|중소|신생|초기|시드|프리시드|series a|series b)/i;
+const SMALL_TEAM_SIGNAL = /(startup|early[- ]stage|seed|series\s*[abc]|emerging|independent|protocol|project team|small team|community-led|스타트업|중소|신생|초기|시드|프리시드|series a|series b|series c)/i;
 const LARGE_TEAM_SIGNAL = /(fortune\s*500|global leader|market leader|one of the largest|major exchange|enterprise group|conglomerate|대기업|그룹사|업계 최대|국내 최대|글로벌 대형)/i;
+const CRYPTO_SIGNAL = /(crypto|blockchain|web3|defi|exchange|token|tge|mainnet|protocol|layer\s*[12]|l1|l2|wallet|gamefi|가상자산|블록체인|토큰|프로토콜)/i;
 const KBW_NAME = /(kbw|korea blockchain week)/i;
 const KBW_EXPLICIT_PARTICIPATION = /(speaker|speaking|sponsor|sponsoring|official partner|booth|exhibit|exhibitor|host|hosting|organizer|organizing|side event|meetup|attend|attending|participat|activation|연사|스폰서|후원|부스|참가|참여|주최|사이드 이벤트|밋업)/i;
 const KOREA_ACTIVITY = /(seoul|korea|서울|한국)/i;
-const EVENT_ACTIVITY = /(event|meetup|conference|summit|launch|tge|mainnet|community|sponsor|activation|행사|밋업|컨퍼런스|서밋|출시|스폰서|커뮤니티)/i;
+const EVENT_ACTIVITY = /(event|meetup|conference|summit|community|sponsor|activation|행사|밋업|컨퍼런스|서밋|스폰서|커뮤니티)/i;
 const MERCH_BUYING_SIGNAL = /(side event|meetup|booth|exhibit|exhibitor|sponsor|activation|community event|team event|staff|merch|shirt|hoodie|행사|밋업|부스|스폰서|후원|커뮤니티|스태프|굿즈|단체복)/i;
+const LAUNCH_SIGNAL = /(tge|token generation|token launch|mainnet(?: launch)?|testnet(?: launch)?|launchpool|launchpad|airdrop|genesis|출시|토큰 생성|메인넷|테스트넷|에어드롭)/i;
+const MOMENTUM_SIGNAL = /(raised|raises|funding|funded|seed round|series\s*[abc]|strategic round|investment|backed by|partnership|partners with|ecosystem growth|user growth|tvl|volume|adoption|grant|accelerator|투자 유치|펀딩|파트너십|성장|사용자 증가|거래량)/i;
+const KOREA_EXPANSION_SIGNAL = /((seoul|korea|한국|서울).{0,80}(listing|exchange|community|partner|expansion|market|meetup|conference|launch|상장|거래소|커뮤니티|파트너|확장|시장|밋업|행사))|((listing|exchange|community|partner|expansion|market|meetup|conference|launch|상장|거래소|커뮤니티|파트너|확장|시장|밋업|행사).{0,80}(seoul|korea|한국|서울))/i;
 const KOREAN_CORP_SIGNAL = /(주식회사|㈜|유한회사|대표이사|사업자등록|본사|한국 법인|대한민국|서울특별시|korea co\.?,?\s*ltd)/i;
 const GENERIC_COMPANY_NAMES = new Set([
   'bitcoin','crypto','blockchain','web3','defi','nft','token','ethereum','seoul','korea','kbw','korea blockchain week',
   'conference','summit','event','events','news','home','homepage','official site'
 ]);
+
+const TOP50_FALLBACK = [
+  'bitcoin','ethereum','tether','bnb','xrp','solana','usd coin','usdc','dogecoin','cardano','tron','avalanche','chainlink',
+  'stellar','sui','hedera','shiba inu','toncoin','polkadot','bitcoin cash','litecoin','uniswap','near protocol','aptos','internet computer',
+  'dai','pepe','aave','bittensor','render','arbitrum','optimism','polygon','mantle','kaspa','cosmos','filecoin','vechain','injective','maker',
+  'the graph','algorand','fantom','celestia','lido dao','immutable','theta network','sei','flow'
+];
+let top50Cache = { expiresAt: 0, names: new Set(TOP50_FALLBACK), source: 'fallback' };
 
 function clean(value, max = 900) { return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : ''; }
 function sentence(value, max = 180) { return clean(value, max).replace(/[.!?。！？]+$/g, '').replace(/\\u003e/gi, '').replace(/\s+([,.;:!?])/g, '$1').trim(); }
@@ -92,6 +108,7 @@ function sourceOnly(url) { return inList(url, SOURCE_ONLY); }
 function sourceStyle(row = {}) { return sourceOnly(row.url) || SOURCE_TITLE.test(clean(row.title, 260)); }
 function displayName(title = '', domain = '') { const raw = clean(title, 160).replace(/\s*[|｜].*$/, '').replace(/\s+[–—-]\s+.*/, '').replace(/^(home|homepage|official site)\s*[:|-]?\s*/i, '').trim(); if (raw.length >= 2 && raw.length <= 70) return raw; return (domain.split('.')[0] || domain).replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).slice(0, 70); }
 function normalizedWords(value = '') { return clean(value, 160).toLowerCase().replace(/[^a-z0-9가-힣]+/g, ' ').split(/\s+/).filter(x => x.length >= 2); }
+function normalizeName(value = '') { return clean(value, 160).toLowerCase().replace(/\b(foundation|labs?|protocol|network|dao|official|finance|chain)\b/g, ' ').replace(/[^a-z0-9가-힣]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function domainMatchesCompany(company = '', domain = '') { const stem = (rootHost(`https://${domain}`) || domain).split('.')[0].replace(/[-_]/g, '').toLowerCase(); if (!stem || stem.length < 3) return false; const words = normalizedWords(company).map(x => x.replace(/[^a-z0-9가-힣]/g, '')); return words.some(w => w.length >= 3 && (w.includes(stem) || stem.includes(w))) || clean(company, 120).toLowerCase().replace(/[^a-z0-9가-힣]/g, '').includes(stem); }
 
 function companyEntityPass(company = '', domain = '') {
@@ -108,6 +125,48 @@ function isKoreanCompany(company = '', domain = '', text = '') {
   return /[가-힣]{2,}/.test(company) && KOREAN_CORP_SIGNAL.test(text);
 }
 
+async function fetchJson(url, options = {}, timeoutMs = 7500) {
+  const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const r = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' });
+    const text = await r.text();
+    if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.status = r.status; throw e; }
+    return text ? JSON.parse(text) : {};
+  } finally { clearTimeout(timer); }
+}
+
+async function loadTop50Coins() {
+  if (top50Cache.expiresAt > Date.now()) return top50Cache;
+  try {
+    const data = await fetchJson('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=50&page=1&sparkline=false', { headers: { Accept: 'application/json' } }, 4500);
+    if (Array.isArray(data) && data.length >= 40) {
+      const names = new Set(TOP50_FALLBACK);
+      for (const coin of data.slice(0, 50)) {
+        const name = normalizeName(coin?.name || '');
+        const symbol = clean(coin?.symbol, 30).toLowerCase();
+        if (name) names.add(name);
+        if (symbol.length >= 4) names.add(symbol);
+      }
+      top50Cache = { expiresAt: Date.now() + 15 * 60 * 1000, names, source: 'coingecko' };
+      return top50Cache;
+    }
+  } catch { /* fallback below */ }
+  top50Cache = { expiresAt: Date.now() + 5 * 60 * 1000, names: new Set(TOP50_FALLBACK), source: 'fallback' };
+  return top50Cache;
+}
+
+function top50Project(company = '', domain = '', rankedNames = new Set()) {
+  const name = normalizeName(company);
+  const stem = normalizeName(String(domain || '').split('.')[0].replace(/[-_]+/g, ' '));
+  if (!name && !stem) return false;
+  for (const coin of rankedNames) {
+    const key = normalizeName(coin);
+    if (!key || key.length < 3) continue;
+    if (name === key || stem === key || name.startsWith(`${key} `) || stem.startsWith(`${key} `)) return true;
+  }
+  return false;
+}
+
 function kbwParticipation(text = '') {
   const value = clean(text, 5000);
   if (KBW_NAME.test(value) && KBW_EXPLICIT_PARTICIPATION.test(value)) return { code: 'confirmed', label: '확정' };
@@ -117,25 +176,37 @@ function kbwParticipation(text = '') {
 
 function kbwOpportunity(text = '', domain = '') {
   const participation = kbwParticipation(text);
+  const launch = LAUNCH_SIGNAL.test(text);
+  const momentum = MOMENTUM_SIGNAL.test(text);
+  const koreaExpansion = KOREA_EXPANSION_SIGNAL.test(text);
+  const merch = MERCH_BUYING_SIGNAL.test(text);
+  const reachable = SMALL_TEAM_SIGNAL.test(text) && !LARGE_TEAM_SIGNAL.test(text) && !LARGE_KBW_DOMAINS.has(domain);
   let score = 0;
   const reasons = [];
-  if (participation.code === 'confirmed') { score += 24; reasons.push('KBW 참여 근거 강함'); }
-  else if (participation.code === 'likely') { score += 9; reasons.push('KBW·서울 연관'); }
-  if (MERCH_BUYING_SIGNAL.test(text)) { score += 14; reasons.push('행사·굿즈 구매 가능성'); }
-  if (SMALL_TEAM_SIGNAL.test(text)) { score += 6; reasons.push('접근 가능한 팀'); }
-  if (LARGE_TEAM_SIGNAL.test(text) || LARGE_KBW_DOMAINS.has(domain)) score -= 10;
-  return { score: Math.max(-10, Math.min(40, score)), reasons };
+  const lanes = [];
+
+  if (participation.code === 'confirmed') { score += 30; reasons.push('KBW·서울 방문 확정 신호'); lanes.push('confirmed-korea'); }
+  else if (participation.code === 'likely') { score += 15; reasons.push('KBW·서울 방문 유력'); lanes.push('likely-korea'); }
+  if (launch) { score += 25; reasons.push('TGE·메인넷·출시 신호'); lanes.push('launch'); }
+  if (momentum) { score += 20; reasons.push('최근 투자·성장·파트너십 신호'); lanes.push('momentum'); }
+  if (koreaExpansion) { score += 15; reasons.push('한국 확장·커뮤니티 신호'); lanes.push('korea-expansion'); }
+  if (reachable) { score += 10; reasons.push('접근 가능한 중소형 팀'); }
+  if (merch) { score += 8; reasons.push('현장·굿즈 구매 가능성'); }
+  if (LARGE_TEAM_SIGNAL.test(text) || LARGE_KBW_DOMAINS.has(domain)) score -= 15;
+
+  const lane = lanes[0] || (merch ? 'event-buying' : '');
+  return { score: Math.max(-15, Math.min(100, score)), reasons, lanes, lane, launch, momentum, koreaExpansion, participation };
 }
 
 function hardPass(text, id) {
-  const c = CAMPAIGNS[id]; if (!c.signal.test(text) || !c.intent.test(text)) return false;
+  const c = CAMPAIGNS[id];
+  if (!c.signal.test(text)) return false;
   if (id === 'kbw') {
-    const crypto = /(crypto|blockchain|web3|defi|exchange|token|tge|mainnet|protocol|가상자산|블록체인)/i.test(text);
-    const participation = kbwParticipation(text);
-    const merch = MERCH_BUYING_SIGNAL.test(text);
-    const launch = /(tge|token generation|mainnet launch|launch|출시)/i.test(text);
-    return crypto && (participation.code === 'confirmed' || (participation.code === 'likely' && (merch || launch)));
+    if (!CRYPTO_SIGNAL.test(text)) return false;
+    const opportunity = kbwOpportunity(text);
+    return opportunity.participation.code !== 'unknown' || opportunity.launch || opportunity.momentum || opportunity.koreaExpansion;
   }
+  if (!c.intent.test(text)) return false;
   if (id === 'apparel') return /(개최|예정|모집|참가|주최|organizer|upcoming|registration|staff)/i.test(text);
   if (id === 'ax') return !AI_VENDOR.test(text) && AX_BUYER.test(text) && /(확장|채용|투자|증가|전환|혁신|자동화|수주|신규|계약|hiring|expansion|operations)/i.test(text);
   if (id === 'video') return /(교회|성당|사찰|설교|예배|법문|법회)/i.test(text) && /(정기|매주|주일|방송|영상|콘텐츠|미디어|설교|법문)/i.test(text);
@@ -146,7 +217,7 @@ function hardPass(text, id) {
 function reachability(text, domain, id) {
   let score = 0;
   if (SMALL_TEAM_SIGNAL.test(text)) score += 12;
-  if (/(founder|co-founder|head of marketing|community lead|events lead|partnerships lead|대표|마케팅 담당|커뮤니티 담당)/i.test(text)) score += 6;
+  if (/(founder|co-founder|head of marketing|community lead|events lead|operations lead|partnerships lead|대표|마케팅 담당|커뮤니티 담당)/i.test(text)) score += 6;
   if (LARGE_TEAM_SIGNAL.test(text)) score -= 18;
   if (id === 'kbw' && LARGE_KBW_DOMAINS.has(domain)) score -= 22;
   return Math.max(-30, Math.min(20, score));
@@ -154,25 +225,22 @@ function reachability(text, domain, id) {
 
 function scoreRow(row, id, text, domain, verifiedDirect = false) {
   const c = CAMPAIGNS[id]; let score = 0;
-  if (c.signal.test(text)) score += 20;
-  if (c.intent.test(text)) score += 20;
-  if (hardPass(text, id)) score += 24;
+  if (c.signal.test(text)) score += 16;
+  if (c.intent.test(text)) score += 14;
+  if (hardPass(text, id)) score += 20;
   if (verifiedDirect) score += 8;
   if (row.published_date) score += 5;
   score += Math.min(7, Math.round((Number(row.score) || 0) * 7));
   score += reachability(text, domain, id);
-  if (id === 'kbw') {
-    const participation = kbwParticipation(text);
-    if (participation.code === 'confirmed') score += 10;
-    else if (participation.code === 'likely') score += 4;
-  }
-  return Math.max(0, Math.min(96, score));
+  if (id === 'kbw') score += Math.min(30, Math.round(kbwOpportunity(text, domain).score * 0.45));
+  return Math.max(0, Math.min(100, score));
 }
 
 function roleFor(id, signal = '') {
   if (id === 'kbw') {
     if (/(side event|meetup|booth|sponsor|activation|행사|밋업|스폰서)/i.test(signal)) return 'Events Lead';
-    if (/(tge|launch|mainnet|출시)/i.test(signal)) return 'Head of Marketing';
+    if (LAUNCH_SIGNAL.test(signal)) return 'Head of Marketing';
+    if (/(partner|partnership|expansion|파트너|확장)/i.test(signal)) return 'Partnerships Lead';
     return 'Community Lead';
   }
   if (id === 'apparel') return /(기업|워크숍|체육대회)/i.test(signal) ? '행사 담당자' : 'Marketing Lead';
@@ -182,10 +250,8 @@ function roleFor(id, signal = '') {
 }
 
 function roleTargets(id, signal = '') {
-  if (id === 'kbw') return /(side event|meetup|booth|sponsor|activation|행사|밋업|스폰서)/i.test(signal)
-    ? ['Events Lead','Head of Marketing','Community Lead','Partnerships Lead','Founder','CEO']
-    : ['Head of Marketing','Community Lead','Partnerships Lead','Founder','CEO'];
-  if (id === 'apparel') return ['행사 담당자','마케팅 담당자','총무 담당자','대표'];
+  if (id === 'kbw') return ['Events Lead','Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Founder','CEO'];
+  if (id === 'apparel') return ['행사 담당자','운영 담당자','마케팅 담당자','총무 담당자','대표'];
   if (id === 'ax') return ['Operations Lead','CX Lead','COO','Founder','CEO'];
   if (id === 'video') return ['Media Lead','Content Lead','홍보 담당자','대표'];
   return ['Founder','CEO','PM','Product Lead','Partnerships Lead'];
@@ -193,15 +259,16 @@ function roleTargets(id, signal = '') {
 
 function offerFor(id, c, signal = '') {
   if (id === 'kbw') {
-    if (/(tge|token generation|mainnet|launch|출시)/i.test(signal)) return '출시·TGE 일정에 맞춰 팀 티셔츠·후디·스태프 의류를 서울에서 제작하고 행사 전 현지 납품';
+    if (LAUNCH_SIGNAL.test(signal)) return 'TGE·출시 일정과 KBW 방한 가능성에 맞춰 팀웨어·스태프 의류·굿즈를 서울 현지에서 제작·납품';
     if (/(side event|meetup|booth|sponsor|activation|행사|밋업|스폰서)/i.test(signal)) return 'KBW 사이드 이벤트·밋업용 티셔츠·후디·스태프 의류를 서울 현지에서 소량부터 제작·납품';
+    return 'KBW 기간 서울 방문 일정이 잡히면 팀웨어·스태프 의류·간단한 행사 굿즈를 현지에서 제작·납품';
   }
   return c.koOffer;
 }
 
 function subjectFor(id, company, participationCode = '', language = 'ko') {
-  if (id === 'kbw' && language === 'ko') return participationCode === 'confirmed' ? `${company} KBW 행사 준비 관련` : `${company} KBW 일정 관련 한 가지 질문`;
-  if (id === 'kbw') return participationCode === 'confirmed' ? `Quick question about ${company}'s KBW plans` : 'Quick question about KBW Seoul';
+  if (id === 'kbw' && language === 'ko') return participationCode === 'confirmed' ? `${company} KBW 행사 준비 관련` : `${company} KBW 서울 일정 관련`;
+  if (id === 'kbw') return participationCode === 'confirmed' ? `Quick question about ${company}'s KBW plans` : `Quick question about ${company} in Seoul during KBW`;
   if (id === 'ax') return `${company} 운영 관련 한 가지 질문`;
   if (id === 'video') return `${company} 영상 운영 관련 한 가지 질문`;
   if (id === 'dev') return `${company} 개발 일정 관련 한 가지 질문`;
@@ -215,10 +282,11 @@ function bestEvidence(text, id, fallback = '') {
   for (const part of parts) {
     let score = 0;
     if (c.signal.test(part)) score += 4;
-    if (c.intent.test(part)) score += 6;
-    if (/(2026|recent|upcoming|announc|launch|host|sponsor|meetup|event|서울|한국|예정|개최|출시|모집)/i.test(part)) score += 3;
+    if (c.intent.test(part)) score += 5;
+    if (/(2026|recent|upcoming|announc|launch|host|sponsor|meetup|event|funding|raised|partner|listing|서울|한국|예정|개최|출시|투자|파트너|상장)/i.test(part)) score += 3;
     if (id === 'kbw' && KBW_NAME.test(part)) score += 4;
     if (id === 'kbw' && KBW_EXPLICIT_PARTICIPATION.test(part)) score += 4;
+    if (id === 'kbw' && (LAUNCH_SIGNAL.test(part) || MOMENTUM_SIGNAL.test(part))) score += 4;
     if (SOURCE_TITLE.test(part)) score -= 4;
     if (score > bestScore) { bestScore = score; best = part; }
   }
@@ -226,7 +294,7 @@ function bestEvidence(text, id, fallback = '') {
 }
 
 function replyQuestion(id, participationCode = '') {
-  if (id === 'kbw') return participationCode === 'confirmed' ? '서울 행사 팀웨어나 스태프 굿즈 준비는 이미 끝났나요?' : '올해 KBW 기간에 팀에서 서울에 오실 계획이 있나요?';
+  if (id === 'kbw') return participationCode === 'confirmed' ? '서울 일정용 팀웨어나 스태프 굿즈 준비는 이미 끝났나요?' : '올해 KBW 기간에 팀에서 서울에 올 가능성이 있나요?';
   if (id === 'apparel') return '이번 행사 단체복이나 스태프 의류는 이미 준비가 끝나셨을까요?';
   if (id === 'ax') return '지금 팀에서 반복업무 자동화를 실제로 검토 중인 게 하나라도 있을까요?';
   if (id === 'video') return '정기 영상의 편집·자막·쇼츠를 지금 내부에서 전부 처리하고 계신가요?';
@@ -235,8 +303,8 @@ function replyQuestion(id, participationCode = '') {
 
 function messageKo(c, id, company, signal, offer, participationCode = '') {
   const trigger = signal || `${company}의 최근 활동`;
-  if (id === 'kbw' && participationCode === 'confirmed') return `안녕하세요.\n\n${trigger} 내용을 보고 연락드렸습니다. KBW 기간 서울 행사에서 사용할 팀웨어나 스태프 굿즈는 이미 준비가 끝나셨을까요?\n\n서울 현지에서 티셔츠·후디·행사 굿즈를 제작해 행사장이나 사무실로 납품할 수 있습니다. 아직 확정 전이라면 가능한 옵션 몇 가지만 보내드리겠습니다.`;
-  if (id === 'kbw') return `안녕하세요.\n\n${trigger} 내용을 보고 한 가지만 여쭤보려고 연락드렸습니다. 올해 KBW 기간에 팀에서 서울 행사나 현장 운영 계획이 있으신가요?\n\n일정이 있다면 티셔츠·스태프 의류·행사 굿즈를 서울에서 현지 제작할 수 있습니다. 계획 중이시면 가능한 옵션 몇 가지만 보내드리겠습니다.`;
+  if (id === 'kbw' && participationCode === 'confirmed') return `안녕하세요.\n\n${trigger} 내용을 보고 연락드렸습니다. KBW 기간 서울에서 사용할 팀웨어나 스태프 굿즈는 이미 준비가 끝나셨을까요?\n\n서울 현지에서 티셔츠·후디·행사 굿즈를 제작해 호텔·사무실·행사장으로 납품할 수 있습니다. 아직 확정 전이라면 가능한 옵션 몇 가지만 보내드리겠습니다.`;
+  if (id === 'kbw') return `안녕하세요.\n\n${trigger} 내용을 보고 한 가지만 여쭤보려고 연락드렸습니다. 올해 KBW 기간에 팀에서 서울에 오실 가능성이 있나요?\n\n행사나 부스가 없어도 팀 일정이 있다면 티셔츠·스태프 의류·간단한 굿즈를 서울에서 현지 제작해 전달할 수 있습니다. 일정 검토 중이면 가능한 옵션 몇 가지만 보내드리겠습니다.`;
   if (id === 'ax') return `안녕하세요.\n\n${trigger} 내용을 보고 한 가지만 여쭤보려고 연락드렸습니다. 지금 팀에서 반복업무 자동화를 실제로 검토 중인 게 하나라도 있을까요? 있다면 업무 이름만 한 줄 보내주세요. 큰 구축 제안 대신 1~2주 안에 작은 PoC로 확인 가능한지와 대략적인 범위만 먼저 답드리겠습니다.`;
   if (id === 'video') return `안녕하세요.\n\n${trigger} 내용을 보고 한 가지만 여쭤보려고 연락드렸습니다. 정기 영상의 편집·자막·쇼츠를 지금 내부에서 전부 처리하고 계신가요? 외주를 비교 중이시라면 최근 영상 하나만 기준으로 어떤 결과물과 납기가 가능한지 먼저 짧게 보내드릴 수 있습니다. 관심 있으시면 “비교”라고만 답 주셔도 됩니다.`;
   if (id === 'dev') return `안녕하세요.\n\n${trigger} 내용을 보고 한 가지만 여쭤보려고 연락드렸습니다. 프로젝트가 몰릴 때 외부 개발 인력을 잠깐 붙일 필요가 있으신가요? 지금 일정이 밀린 프로젝트가 하나라도 있다면 웹·앱·내부툴 중 무엇인지 한 줄만 보내주세요. 투입 가능 여부와 일정부터 짧게 답드리겠습니다.`;
@@ -246,23 +314,23 @@ function messageKo(c, id, company, signal, offer, participationCode = '') {
 function messageEn(c, id, company, signal, participationCode = '') {
   const trigger = signal || `${company}'s recent activity`;
   if (id === 'kbw' && participationCode === 'confirmed') return `Hi,\n\nI saw ${trigger}. Quick question — have you already sorted team shirts or staff merch for Seoul? I work with a local production team here in Korea, so we can handle small-to-mid runs locally and deliver to your hotel, office or venue instead of shipping boxes into the country. If merch is still open, I can send a few local options.`;
-  if (id === 'kbw') return `Hi,\n\nI saw ${trigger}. Quick question — is your team planning to be in Seoul for KBW this year? I work with a local production team here, so if you are, we can handle shirts, staff wear and event merch locally instead of shipping everything into Korea. If KBW is on your calendar, happy to send a few options.`;
+  if (id === 'kbw') return `Hi,\n\nI saw ${trigger}. Quick question — is there a chance your team will be in Seoul during KBW this year? Even without a booth or side event, we can produce team shirts, staff wear and simple merch locally in Seoul and deliver to your hotel, office or venue. If Seoul is being discussed, happy to send a few local options.`;
   return `Hi,\n\nI saw ${trigger} and wanted to ask one quick question. Is this something your team is actively working on right now? If yes, reply with the timing and I’ll send one concrete option — no deck or call needed first.`;
 }
 
-async function fetchJson(url, options = {}, timeoutMs = 7500) { const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), timeoutMs); try { const r = await fetch(url, { ...options, signal: controller.signal, cache: 'no-store' }); const text = await r.text(); if (!r.ok) { const e = new Error(`HTTP ${r.status}`); e.status = r.status; throw e; } return text ? JSON.parse(text) : {}; } finally { clearTimeout(timer); } }
 async function braveSearch(query, key) { if (!key) return []; const params = new URLSearchParams({ q: clean(query, 390), count: '15', country: 'KR', safesearch: 'moderate', freshness: 'pm' }); const data = await fetchJson(`https://api.search.brave.com/res/v1/web/search?${params}`, { headers: { Accept: 'application/json', 'X-Subscription-Token': key } }, 7000); return (Array.isArray(data?.web?.results) ? data.web.results : []).map((r, i) => ({ title: clean(r.title, 260), url: clean(r.url, 500), content: clean(r.description, 900), score: Math.max(0, 1 - i / 20), published_date: clean(r.age, 60), _engine: 'brave' })).filter(r => /^https?:\/\//i.test(r.url)); }
 async function exaSearch(query, key) { if (!key) return []; const start = new Date(Date.now() - 365 * 86400000).toISOString(); const data = await fetchJson('https://api.exa.ai/search', { method: 'POST', headers: { 'x-api-key': key, 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ query: clean(query, 600), type: 'fast', numResults: 10, startPublishedDate: start, excludeDomains: ALWAYS_BLOCKED, contents: { highlights: true } }) }, 9000); return (Array.isArray(data?.results) ? data.results : []).map((r, i) => ({ title: clean(r.title, 260), url: clean(r.url, 500), content: clean(Array.isArray(r.highlights) && r.highlights.length ? r.highlights.join(' ') : (r.text || ''), 1400), score: Math.max(0, 1 - i / 14), published_date: clean(r.publishedDate, 60), _engine: 'exa' })).filter(r => /^https?:\/\//i.test(r.url)); }
 async function jinaRead(url, key) { if (!key || !/^https?:\/\//i.test(url)) return ''; const controller = new AbortController(); const timer = setTimeout(() => controller.abort(), 6000); try { const r = await fetch(`https://r.jina.ai/${url}`, { headers: { Authorization: `Bearer ${key}`, Accept: 'text/plain' }, signal: controller.signal, cache: 'no-store' }); if (!r.ok) return ''; return (await r.text()).slice(0, 22000); } catch { return ''; } finally { clearTimeout(timer); } }
 
-function resolveCompanyFromJina(markdown, sourceUrl, campaignId) {
+function resolveCompanyFromJina(markdown, sourceUrl, campaignId, rankedNames = new Set()) {
   const sourceDomain = rootHost(sourceUrl); const c = CAMPAIGNS[campaignId]; const candidates = []; const re = /\[([^\]]{2,90})\]\((https?:\/\/[^)\s]+)\)/g; let m;
   while ((m = re.exec(markdown)) && candidates.length < 120) {
     const url = m[2]; const domain = rootHost(url); if (!domain || domain === sourceDomain || blocked(url) || sourceOnly(url)) continue;
     const anchor = clean(m[1], 90); if (/^(read more|learn more|website|official site|home|click here|source)$/i.test(anchor) || !companyEntityPass(anchor, domain)) continue;
+    if (campaignId === 'kbw' && top50Project(anchor, domain, rankedNames)) continue;
     const around = clean(markdown.slice(Math.max(0, m.index - 180), Math.min(markdown.length, re.lastIndex + 260)), 560); const hay = `${anchor} ${domain} ${around}`; let score = 0;
-    if (c.signal.test(hay)) score += 4; if (c.intent.test(hay)) score += 5; if (hardPass(hay, campaignId)) score += 10; if (domainMatchesCompany(anchor, domain)) score += 5; if (SMALL_TEAM_SIGNAL.test(hay)) score += 3; if (SOURCE_TITLE.test(anchor)) score -= 6;
-    if (campaignId === 'kbw') score += Math.max(0, kbwOpportunity(hay, domain).score / 4);
+    if (c.signal.test(hay)) score += 4; if (c.intent.test(hay)) score += 4; if (hardPass(hay, campaignId)) score += 10; if (domainMatchesCompany(anchor, domain)) score += 5; if (SMALL_TEAM_SIGNAL.test(hay)) score += 3; if (SOURCE_TITLE.test(anchor)) score -= 6;
+    if (campaignId === 'kbw') score += Math.max(0, kbwOpportunity(hay, domain).score / 5);
     if (score >= 10) candidates.push({ url: `https://${domain}/`, domain, company: displayName(anchor, domain), score, text: hay });
   }
   candidates.sort((a, b) => b.score - a.score); return candidates[0] || null;
@@ -278,17 +346,17 @@ function makeLead({ campaignId, company, domain, sourceUrl, sourceTitle, publish
   const offer = offerFor(campaignId, c, signal);
   const reach = reachability(rawText, domain, campaignId);
   const participation = campaignId === 'kbw' ? kbwParticipation(rawText) : null;
-  const opportunity = campaignId === 'kbw' ? kbwOpportunity(rawText, domain) : { score: 0, reasons: [] };
+  const opportunity = campaignId === 'kbw' ? kbwOpportunity(rawText, domain) : { score: 0, reasons: [], lane: '' };
   const language = campaignId === 'kbw' ? (isKoreanCompany(company, domain, rawText) ? 'ko' : 'en') : 'ko';
-  const winLabel = opportunity.score >= 28 ? '승산 높음' : opportunity.score >= 16 ? '승산 있음' : campaignId === 'kbw' ? '검토 후보' : '';
+  const winLabel = opportunity.score >= 55 ? '승산 높음' : opportunity.score >= 30 ? '승산 있음' : campaignId === 'kbw' ? '탐색 후보' : '';
   return {
     id: `${campaignId}:${domain}`, campaign: campaignId, campaign_label: c.label, company, domain, url: `https://${domain}/`,
     source_url: sourceUrl, source_title: sourceTitle, published_date: publishedDate || '', signal: clean(signal, 320), score,
-    sales_priority: score + opportunity.score, win_score: opportunity.score, win_label: winLabel,
+    sales_priority: score + opportunity.score, win_score: opportunity.score, win_label: winLabel, opportunity_lane: opportunity.lane || '',
     reachability: reach >= 8 ? '접근 우선' : reach <= -12 ? '대형·후순위' : '일반',
     kbw_status: participation?.label || '', kbw_status_code: participation?.code || '', outreach_language: language,
     verified_company: true, verified_by: verifiedBy,
-    quality_reasons: [...(extra.quality_reasons || []), ...(opportunity.reasons || []), participation ? `KBW ${participation.label}` : '', language === 'ko' ? '한국 회사 · 한글 메일' : '', winLabel].filter(Boolean),
+    quality_reasons: [...(extra.quality_reasons || []), ...(opportunity.reasons || []), language === 'ko' ? '한국 회사 · 한글 메일' : '', winLabel].filter(Boolean),
     tool_signals: extra.tool_signals || [], recommended_role: role, role_targets: roleTargets(campaignId, signal), offer,
     outreach_goal: 'reply', outreach_stage: 'first_touch', reply_question: replyQuestion(campaignId, participation?.code || ''),
     subject: subjectFor(campaignId, company, participation?.code || '', language),
@@ -298,7 +366,7 @@ function makeLead({ campaignId, company, domain, sourceUrl, sourceTitle, publish
   };
 }
 
-async function rowsToLeads(rows, campaignId, excludes, jinaKey, limit = 12, maxJinaReads = 3) {
+async function rowsToLeads(rows, campaignId, excludes, jinaKey, rankedNames, limit = 12, maxJinaReads = 4) {
   const seen = new Set(), leads = []; let jinaReads = 0;
   for (const row of rows) {
     if (leads.length >= limit || blocked(row.url)) continue;
@@ -306,17 +374,18 @@ async function rowsToLeads(rows, campaignId, excludes, jinaKey, limit = 12, maxJ
     const direct = !sourceStyle(row) && domainMatchesCompany(company, domain) && companyEntityPass(company, domain);
     if (!direct) {
       if (!jinaKey || jinaReads >= maxJinaReads) continue; jinaReads += 1;
-      const page = await jinaRead(row.url, jinaKey); if (!page) continue; const resolved = resolveCompanyFromJina(page, row.url, campaignId); if (!resolved) continue;
+      const page = await jinaRead(row.url, jinaKey); if (!page) continue;
+      const resolved = resolveCompanyFromJina(page, row.url, campaignId, rankedNames); if (!resolved) continue;
       domain = resolved.domain; company = resolved.company; text = `${text} ${resolved.text} ${page.slice(0, 4200)}`; verifiedBy = 'jina-source-resolution';
     }
     if (!domain || excludes.has(domain) || seen.has(domain) || !companyEntityPass(company, domain) || !hardPass(text, campaignId)) continue;
-    if (campaignId === 'kbw' && kbwParticipation(text).code === 'unknown') continue;
-    const score = scoreRow(row, campaignId, text, domain, direct); if (score < 66) continue;
+    if (campaignId === 'kbw' && top50Project(company, domain, rankedNames)) continue;
+    const score = scoreRow(row, campaignId, text, domain, direct); if (score < (campaignId === 'kbw' ? 56 : 66)) continue;
     seen.add(domain);
     leads.push(makeLead({
       campaignId, company, domain, sourceUrl: row.url, sourceTitle: clean(row.title, 220), publishedDate: clean(row.published_date, 60),
       rawText: text, score, verifiedBy,
-      extra: { quality_reasons: ['실제 회사 확인','구매 신호 확인', direct ? '회사·도메인 일치' : '소스에서 실제 회사 추출'], tool_signals: [row._engine || 'tavily'] }
+      extra: { quality_reasons: ['실제 회사 확인', direct ? '회사·도메인 일치' : '외부 소스에서 실제 회사 추출'], tool_signals: [row._engine || 'tavily'] }
     }));
   }
   return leads;
@@ -335,6 +404,14 @@ async function dartLeads(key, excludes, cycle) {
   }));
 }
 
+function searchQueries(campaignId, cycle) {
+  const campaign = CAMPAIGNS[campaignId];
+  if (campaignId !== 'kbw') return campaign.queries.slice(0, 2);
+  const pool = campaign.queries;
+  const start = (cycle * 2) % pool.length;
+  return [pool[start], pool[(start + 1) % pool.length]];
+}
+
 export async function POST(request) {
   if (!tavilyConfigured()) return Response.json({ error: 'TAVILY_API_KEY가 필요합니다.' }, { status: 503 });
   let body = {}; try { body = await request.json(); } catch { return Response.json({ error: '요청 형식이 잘못됐습니다.' }, { status: 400 }); }
@@ -343,38 +420,41 @@ export async function POST(request) {
   const excludes = new Set(Array.isArray(body.excludeDomains) ? body.excludeDomains.map(x => String(x).toLowerCase()) : []);
   const exaKey = clean(body?.tools?.exaKey, 300), jinaKey = clean(body?.tools?.jinaKey, 300), braveKey = clean(body?.tools?.braveKey, 300), dartKey = clean(body?.tools?.dartKey, 100);
   const variant = VARIANTS[cycle % VARIANTS.length];
-  const queries = campaign.queries.slice(0, 2).map((q, i) => `${q} ${i === cycle % 2 ? variant : ''}`.trim());
+  const queries = searchQueries(campaignId, cycle).map((q, i) => `${q} ${i === cycle % 2 ? variant : ''}`.trim());
   try {
+    const top50 = campaignId === 'kbw' ? await loadTop50Coins() : { names: new Set(), source: 'unused' };
     const dartPromise = campaignId === 'ax' && dartKey ? dartLeads(dartKey, excludes, cycle).catch(() => []) : Promise.resolve([]);
-    const search = await tavilySearchMany(queries, { maxResults: 12, timeRange: 'year', excludeDomains: ALWAYS_BLOCKED, topic: 'general' });
-    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, 12, 3);
+    const search = await tavilySearchMany(queries, { maxResults: 14, timeRange: 'year', excludeDomains: ALWAYS_BLOCKED, topic: 'general' });
+    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, top50.names, 12, 4);
     let exaUsed = false;
     if (leads.length < 8 && exaKey) {
       try {
         const extra = await exaSearch(`${campaign.exaQuery} ${variant}`, exaKey); exaUsed = true;
-        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), jinaKey, 10, 3); leads.push(...more);
+        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), jinaKey, top50.names, 10, 3); leads.push(...more);
       } catch { /* Tavily remains usable; Exa is optional. */ }
     }
     let braveUsed = false;
     if (leads.length < 6 && braveKey) {
       try {
-        const extra = await braveSearch(campaign.queries[cycle % campaign.queries.length], braveKey); braveUsed = true;
-        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), jinaKey, 8, 1); leads.push(...more);
+        const extra = await braveSearch(searchQueries(campaignId, cycle)[0], braveKey); braveUsed = true;
+        const more = await rowsToLeads(extra, campaignId, new Set([...excludes, ...leads.map(x => x.domain)]), jinaKey, top50.names, 8, 1); leads.push(...more);
       } catch { /* Existing results remain usable. */ }
     }
     const dartExtra = await dartPromise, dartUsed = dartExtra.length > 0; if (campaignId === 'ax' && dartExtra.length) leads = [...dartExtra, ...leads];
     const unique = [], seen = new Set(); let largeCount = 0;
     for (const lead of leads.sort((a, b) => (b.sales_priority || b.score) - (a.sales_priority || a.score))) {
       if (!lead.domain || seen.has(lead.domain) || excludes.has(lead.domain)) continue;
-      const large = lead.reachability === '대형·후순위'; if (large && largeCount >= 2) continue;
+      if (campaignId === 'kbw' && top50Project(lead.company, lead.domain, top50.names)) continue;
+      const large = lead.reachability === '대형·후순위'; if (large && largeCount >= 1) continue;
       if (large) largeCount += 1; seen.add(lead.domain); unique.push(lead); if (unique.length >= 12) break;
     }
     return Response.json({
       campaign: campaignId, campaign_label: campaign.label, leads: unique,
       meta: {
         ...search.meta, returned: unique.length, cycle, jina_used: Boolean(jinaKey), brave_used: braveUsed, exa_used: exaUsed, opendart_used: dartUsed,
-        hard_filter: true, company_entity_filter: true, opportunity_priority: true, language_routing: true, reachability_priority: true,
-        message_schema: 'reply-first-v3', kbw_participation_gate: true
+        hard_filter: true, company_entity_filter: true, top50_marketcap_filter: campaignId === 'kbw', top50_source: top50.source,
+        opportunity_lanes: campaignId === 'kbw' ? ['confirmed-korea','likely-korea','launch','momentum','korea-expansion'] : [],
+        opportunity_priority: true, language_routing: true, reachability_priority: true, message_schema: 'reply-first-v4', kbw_participation_gate: false
       }
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
