@@ -1,6 +1,6 @@
 const $ = id => document.getElementById(id);
 
-const APP_VERSION = '20260730-win-filter-v1';
+const APP_VERSION = '20260731-kbw-lanes-v2';
 const LEADS_KEY = 'kpa.hunt.leads';
 const SELECTED_KEY = 'kpa.hunt.selected';
 const REJECTED_KEY = 'kpa.hunt.rejected';
@@ -195,7 +195,7 @@ function uniqueContacts(lead = {}) {
     const key = clean(c.email || c.linkedinUrl || c.name, 220).toLowerCase();
     if (!key || seen.has(key)) return false;
     seen.add(key); return true;
-  }).slice(0,3);
+  }).slice(0,4);
 }
 
 function contactHtml(lead = {}) {
@@ -258,7 +258,7 @@ async function runHuntCycle() {
   const result = await post('/api/hunt',{campaign:state.currentCampaign,cycle:state.cycle,excludeDomains:excluded,tools:toolKeys()},42000);
   const added = mergeLeads(result.leads || []);
   const used = [result.meta?.exa_used?'Exa':'',result.meta?.jina_used?'Jina':'',result.meta?.brave_used?'Brave':'',result.meta?.opendart_used?'DART':''].filter(Boolean).join('+');
-  state.statusText = added.length ? `${added.length}개 검증 통과${used ? ` · ${used}` : ''} · 이메일 1~3개 확인 중` : '필수 신호를 통과한 새 후보 없음'; render();
+  state.statusText = added.length ? `${added.length}개 검증 통과${used ? ` · ${used}` : ''} · 이메일 최대 4개 확인 중` : '필수 신호를 통과한 새 후보 없음'; render();
   if (added.length) await mapLimit(added.slice(0,10),4,enrichContact);
   state.statusText = added.length ? `${added.length}개 처리 완료` : ''; render(); return added.length;
 }
@@ -277,7 +277,6 @@ async function startAutoHunt() {
 }
 function stopAutoHunt(){ state.auto=false; state.autoUntil=0; state.stopped=true; abortAll(); state.statusText='자동사냥 중지 · 현재 결과 유지'; saveState(); render(); }
 function handleRunButton(){ if(state.auto)return stopAutoHunt(); if(state.stopped){ state.statusText='새 검색 시작'; return manualHunt(); } if(state.firstRun)return startAutoHunt(); return manualHunt(); }
-
 function populateCampaigns(){ $('campaignSelect').innerHTML=Object.entries(CAMPAIGNS).map(([id,c])=>`<option value="${id}">${c.icon} ${c.label} · ${c.market}</option>`).join(''); $('campaignSelect').value=CAMPAIGNS[state.currentCampaign]?state.currentCampaign:'kbw'; $('campaignSelect').addEventListener('change',e=>{state.currentCampaign=e.target.value;saveState();state.statusText=`${campaign().label} 모드`;render();}); }
 function setupSettings(){
   const fields=[[EXA_KEY,'exaKey'],[JINA_KEY,'jinaKey'],[BRAVE_KEY,'braveKey'],[DART_KEY,'dartKey']]; for(const [key,id] of fields) $(id).value=localStorage.getItem(key)||'';
