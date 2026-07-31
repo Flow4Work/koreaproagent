@@ -1,0 +1,155 @@
+import {
+  buildGoogleAuthUrl,
+  buildRawMessage,
+  clearSessionCookie,
+  exchangeAuthorizationCode,
+  fetchGoogleEmail,
+  gmailConfig,
+  gmailConfigured,
+  randomNonce,
+  readOAuthState,
+  readSession,
+  refreshAccessToken,
+  safeReturnPath,
+  sameOriginRequest,
+  sendGmailMessage,
+  sessionCookie,
+  stateCookie
+} from '../lib/gmail.js';
+
+function clean(value = '', max = 500) {
+  return String(value || '').trim().slice(0, max);
+}
+
+function validEmail(value = '') {
+  return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(value);
+}
+
+function appRedirect(origin, path, status) {
+  const target = new URL(safeReturnPath(path), origin);
+  target.searchParams.set('gmail', status);
+  return target.toString();
+}
+
+function redirectResponse(location, setCookie = '') {
+  const headers = new Headers({ Location: location, 'Cache-Control':'no-store' });
+  if (setCookie) headers.append('Set-Cookie', setCookie);
+  return new Response(null, { status:302, headers });
+}
+
+function reconnectResponse(message = 'Gmail 연결이 만료되었습니다. 다시 연결해주세요.') {
+  const headers = new Headers({ 'Content-Type':'application/json; charset=utf-8', 'Cache-Control':'no-store' });
+  headers.append('Set-Cookie', clearSessionCookie());
+  return new Response(JSON.stringify({ error:message, code:'GMAIL_RECONNECT_REQUIRED' }), { status:401, headers });
+}
+
+async function status(request) {
+  const config = gmailConfig(request);
+  const configured = gmailConfigured(request);
+  const session = configured ? readSession(request, config.sessionSecret) : null;
+  const connected = Boolean(session?.refreshToken && session?.email === config.senderEmail);
+  return Response.json({ configured, connected, sender:{ email:config.senderEmail, name:config.senderName } }, { headers:{ 'Cache-Control':'no-store' } });
+}
+
+async function startAuth(request) {
+  const config = gmailConfig(request);
+  if (!gmailConfigured(request)) {
+    return Response.json({
+      error:'Gmail OAuth 설정이 아직 완료되지 않았습니다.',
+      required:['GOOGLE_GMAIL_CLIENT_ID','GOOGLE_GMAIL_CLIENT_SECRET','GMAIL_SESSION_SECRET']
+    }, { status:503, headers:{ 'Cache-Control':'no-store' } });
+  }
+
+  const url = new URL(request.url);
+  const returnTo = safeReturnPath(url.searchParams.get('return') || '/');
+  const nonce = randomNonce();
+  const cookie = stateCookie({ nonce, returnTo, exp:Date.now() + 10 * 60 * 1000 }, config.sessionSecret);
+  return redirectResponse(buildGoogleAuthUrl(request, nonce), cookie);
+}
+
+async function oauthCallback(request) {
+  const config = gmailConfig(request);
+  const origin = new URL(request.url).origin;
+  if (!gmailConfigured(request)) return redirectResponse(appRedirect(origin, '/', 'not_configured'));
+
+  const url = new URL(request.url);
+  const state = readOAuthState(request, config.sessionSecret);
+  const returnedState = url.searchParams.get('state') || '';
+  const code = url.searchParams.get('code') || '';
+  const oauthError = url.searchParams.get('error') || '';
+  const returnTo = safeReturnPath(state?.returnTo || '/');
+
+  if (oauthError) return redirectResponse(appRedirect(origin, returnTo, 'cancelled'));
+  if (!state || !returnedState || returnedState !== state.nonce || Number(state.exp || 0) < Date.now()) {
+    return redirectResponse(appRedirect(origin, returnTo, 'state_error'));
+  }
+  if (!code) return redirectResponse(appRedirect(origin, returnTo, 'code_error'));
+
+  try {
+    const tokens = await exchangeAuthorizationCode(request, code);
+    if (!tokens.access_token || !tokens.refresh_token) {
+      return redirectResponse(appRedirect(origin, returnTo, 'refresh_token_missing'));
+    }
+
+    const email = await fetchGoogleEmail(tokens.access_token);
+    if (!email || email !== config.senderEmail) {
+      return redirectResponse(appRedirect(origin, returnTo, 'wrong_account'));
+    }
+
+    const cookie = sessionCookie({ refreshToken:tokens.refresh_token, email, connectedAt:new Date().toISOString() }, config.sessionSecret);
+    return redirectResponse(appRedirect(origin, returnTo, 'connected'), cookie);
+  } catch {
+    return redirectResponse(appRedirect(origin, returnTo, 'oauth_error'));
+  }
+}
+
+async function send(request) {
+  if (!sameOriginRequest(request)) return Response.json({ error:'허용되지 않은 요청입니다.' }, { status:403 });
+  if (!gmailConfigured(request)) return Response.json({ error:'Gmail 발송 설정이 아직 완료되지 않았습니다.', code:'GMAIL_NOT_CONFIGURED' }, { status:503 });
+
+  const config = gmailConfig(request);
+  const session = readSession(request, config.sessionSecret);
+  if (!session?.refreshToken || session?.email !== config.senderEmail) return reconnectResponse('Gmail 계정을 먼저 연결해주세요.');
+
+  let payload = {};
+  try { payload = await request.json(); }
+  catch { return Response.json({ error:'요청 형식이 잘못됐습니다.' }, { status:400 }); }
+
+  const to = clean(payload.to, 320).toLowerCase();
+  const subject = clean(payload.subject, 180).replace(/[\r\n]+/g, ' ');
+  const body = String(payload.body || '').trim().slice(0, 12000);
+  if (!validEmail(to)) return Response.json({ error:'받는 사람 이메일을 확인해주세요.' }, { status:400 });
+  if (!subject) return Response.json({ error:'메일 제목이 비어 있습니다.' }, { status:400 });
+  if (body.length < 20) return Response.json({ error:'메일 본문이 너무 짧습니다.' }, { status:400 });
+
+  try {
+    const accessToken = await refreshAccessToken(request, session.refreshToken);
+    const raw = buildRawMessage({ to, subject, body, senderEmail:config.senderEmail, senderName:config.senderName });
+    const sent = await sendGmailMessage(accessToken, raw);
+    return Response.json({
+      ok:true,
+      id:sent.id || null,
+      threadId:sent.threadId || null,
+      to,
+      sender:{ email:config.senderEmail, name:config.senderName },
+      sentAt:new Date().toISOString()
+    }, { headers:{ 'Cache-Control':'no-store' } });
+  } catch (error) {
+    if (error?.code === 'invalid_grant') return reconnectResponse();
+    const message = String(error?.message || 'Gmail 발송에 실패했습니다.').replace(/[A-Za-z0-9_-]{32,}/g, '[redacted]').slice(0, 300);
+    return Response.json({ error:message, code:'GMAIL_SEND_FAILED' }, { status:502, headers:{ 'Cache-Control':'no-store' } });
+  }
+}
+
+export async function GET(request) {
+  const url = new URL(request.url);
+  if (url.searchParams.get('code') || url.searchParams.get('error')) return oauthCallback(request);
+  const action = url.searchParams.get('action') || 'status';
+  if (action === 'auth') return startAuth(request);
+  if (action === 'status') return status(request);
+  return Response.json({ error:'지원하지 않는 Gmail 작업입니다.' }, { status:400, headers:{ 'Cache-Control':'no-store' } });
+}
+
+export async function POST(request) {
+  return send(request);
+}
