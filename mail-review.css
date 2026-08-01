@@ -19,29 +19,33 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   background: rgba(255,255,255,.96); box-shadow: 0 8px 24px rgba(30,42,65,.08);
   backdrop-filter: blur(12px);
 }
-.toolbar-left, .review-actions, .bulk-template, .card-head-actions { display: flex; align-items: center; gap: 8px; }
+.toolbar-left, .review-actions { display: flex; align-items: center; gap: 8px; }
 .back-link { color: #334155; font-weight: 800; text-decoration: none; padding: 8px 10px; border-radius: 9px; }
 .back-link:hover { background: #eef2f7; }
 .review-summary { font-weight: 800; white-space: nowrap; }
 .review-actions { flex-wrap: wrap; justify-content: flex-end; }
-.bulk-template { padding: 3px; border: 1px solid #dbe3ee; border-radius: 10px; background: #f7f9fc; }
-.bulk-template span { padding-left: 6px; color: #64748b; font-size: 12px; font-weight: 800; }
-button, .button { border: 0; border-radius: 9px; padding: 9px 13px; font-weight: 800; transition: transform .12s ease, box-shadow .12s ease, background .12s ease; }
-button:not(:disabled):hover { transform: translateY(-1px); }
-.send-all { background: linear-gradient(135deg, #087443, #0a8f56); color: #fff; box-shadow: 0 6px 14px rgba(8,116,67,.22); }
-.connection { background: #eef2f7; color: #334155; }
-.connection.connected { background: #e4f7ed; color: #087443; }
-.apply-a { background: #e8f0ff; color: #2457c5; }
-.apply-b { background: #f0eaff; color: #6842c2; }
+.top-action {
+  height: 38px; min-height: 38px; border-radius: 9px; padding: 0 14px;
+  border: 1px solid transparent; font-weight: 800;
+  transition: transform .12s ease, box-shadow .12s ease, background .12s ease;
+}
+.top-action:not(:disabled):hover, .dialog-actions button:not(:disabled):hover, .template-switch button:not(:disabled):hover { transform: translateY(-1px); }
+.connection { background: #eef2f7; color: #334155; border-color: #e1e7ef; }
+.connection.connected { background: #e8f5ee; color: #087443; border-color: #c8e8d7; }
+.test-send { background: #fff; color: #111827; border-color: #111827; font-size: 12px; padding: 0 12px; }
+.send-all { background: #111827; color: #fff; box-shadow: 0 6px 14px rgba(17,24,39,.2); }
 .danger { background: #b42318; color: #fff; }
-.test-action { background: #fff1df; color: #a44b00; border: 1px solid #ffd29f; }
-.ghost { background: #eef2f7; color: #334155; }
 .mail-cards { display: grid; gap: 12px; }
-.mail-card { background: #fff; border: 1px solid #dce3ec; border-radius: 15px; overflow: hidden; box-shadow: 0 7px 20px rgba(30,42,65,.05); }
-.mail-card.excluded { opacity: .56; }
+.mail-card {
+  background: #fff; border: 1px solid #dce3ec; border-radius: 15px; overflow: hidden;
+  box-shadow: 0 7px 20px rgba(30,42,65,.05);
+  transition: border-color .15s ease, box-shadow .15s ease, opacity .15s ease;
+}
+.mail-card.selected { border-color: #3b6fd8; box-shadow: 0 0 0 2px rgba(59,111,216,.1), 0 8px 24px rgba(30,42,65,.07); }
+.mail-card.excluded { opacity: .55; }
 .mail-card-header {
   display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 12px; align-items: center;
-  min-height: 58px; padding: 10px 14px; border-bottom: 1px solid #edf1f5;
+  min-height: 58px; padding: 10px 14px; border-bottom: 1px solid #edf1f5; cursor: pointer;
 }
 .company-line { display: flex; min-width: 0; align-items: center; gap: 9px; flex-wrap: wrap; }
 .company-line h2 { margin: 0; max-width: min(720px, 60vw); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 17px; }
@@ -53,9 +57,9 @@ button:not(:disabled):hover { transform: translateY(-1px); }
 .send-state.failed { color: #b42318; background: #fee4e2; }
 .send-state.sending { color: #175cd3; background: #e7efff; }
 .send-state.waiting { color: #7a5d00; background: #fff2c6; }
-.mail-card-body { padding: 12px 14px 14px; }
+.mail-card-body { padding: 12px 14px 14px; cursor: pointer; }
 .mail-top-fields {
-  display: grid; grid-template-columns: minmax(220px,1.15fr) minmax(210px,1fr) minmax(300px,1.7fr) 250px;
+  display: grid; grid-template-columns: minmax(220px,1.15fr) minmax(210px,1fr) minmax(300px,1.7fr) 270px;
   gap: 10px; align-items: end; margin-bottom: 11px;
 }
 .field { display: grid; gap: 5px; min-width: 0; }
@@ -66,35 +70,41 @@ button:not(:disabled):hover { transform: translateY(-1px); }
 }
 .field input:focus, .field select:focus, .field textarea:focus { border-color: #6f8fd9; box-shadow: 0 0 0 3px rgba(71,111,197,.11); }
 .template-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.template-switch button { padding: 9px 8px; background: #eef2f7; color: #536174; font-size: 12px; }
+.template-switch button { border: 0; border-radius: 9px; padding: 9px 8px; background: #eef2f7; color: #536174; font-size: 12px; font-weight: 800; cursor: pointer; }
 .template-switch button[data-template="A"].active { background: #2f67d8; color: #fff; box-shadow: 0 4px 11px rgba(47,103,216,.23); }
 .template-switch button[data-template="B"].active { background: #7251c9; color: #fff; box-shadow: 0 4px 11px rgba(114,81,201,.23); }
 .mail-editor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.mail-editor-grid textarea { height: 330px; min-height: 220px; resize: vertical; line-height: 1.52; font-size: 14px; }
+.mail-editor-grid textarea { height: 300px; min-height: 210px; resize: vertical; line-height: 1.55; font-size: 14px; }
 .translation-field textarea { background: #f7f9fc; }
 .card-messages { display: flex; gap: 12px; min-height: 0; padding-top: 7px; }
 .error-text { color: #b42318; font-size: 12px; font-weight: 800; }
 .countdown { color: #7a5d00; font-size: 12px; font-weight: 800; }
-dialog { width: min(460px, calc(100% - 28px)); padding: 0; border: 0; border-radius: 16px; box-shadow: 0 24px 80px rgba(15,23,42,.28); }
+.empty-state { display: grid; gap: 10px; justify-items: start; padding: 24px; border: 1px solid #dce3ec; border-radius: 15px; background: #fff; }
+dialog { width: min(480px, calc(100% - 28px)); padding: 0; border: 0; border-radius: 16px; box-shadow: 0 24px 80px rgba(15,23,42,.28); }
 dialog::backdrop { background: rgba(15,23,42,.48); backdrop-filter: blur(3px); }
-.dialog-form { padding: 20px; }
-.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.dialog-form { display: grid; gap: 13px; padding: 20px; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .dialog-head strong { font-size: 19px; }
-.dialog-close { width: 34px; height: 34px; padding: 0; background: #eef2f7; color: #475569; }
-.dialog-context { margin: 0 0 14px; color: #64748b; font-size: 13px; line-height: 1.45; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dialog-close { width: 34px; height: 34px; padding: 0; border: 0; border-radius: 9px; background: #eef2f7; color: #475569; cursor: pointer; }
+.dialog-context { margin: 0; color: #64748b; font-size: 13px; line-height: 1.45; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 3px; }
+.dialog-actions button { height: 38px; border-radius: 9px; padding: 0 14px; font-weight: 800; cursor: pointer; }
+.ghost { border: 0; background: #eef2f7; color: #334155; }
+.test-confirm { border: 1px solid #111827; background: #fff; color: #111827; }
 @media (max-width: 1180px) {
   .mail-top-fields { grid-template-columns: 1fr 1fr; }
-  .mail-editor-grid textarea { height: 300px; }
+  .mail-editor-grid textarea { height: 280px; }
 }
 @media (max-width: 760px) {
   .review-shell { width: min(100% - 14px, 1580px); padding-top: 7px; }
   .review-toolbar { position: static; display: grid; }
   .toolbar-left, .review-actions { justify-content: space-between; }
   .review-summary { font-size: 13px; }
+  .review-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .send-all, .danger { grid-column: 1 / -1; }
   .mail-card-header { grid-template-columns: auto 1fr; }
-  .card-head-actions { grid-column: 1 / -1; justify-content: flex-end; }
+  .send-state { grid-column: 1 / -1; justify-self: end; }
   .company-line h2 { max-width: 62vw; }
   .mail-top-fields, .mail-editor-grid { grid-template-columns: 1fr; }
-  .mail-editor-grid textarea { height: 280px; }
+  .mail-editor-grid textarea { height: 260px; }
 }
