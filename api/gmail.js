@@ -17,8 +17,6 @@ import {
   stateCookie
 } from '../lib/gmail.js';
 
-const TEST_RECIPIENT = 'treecox19@gmail.com';
-
 function clean(value = '', max = 500) {
   return String(value || '').trim().slice(0, max);
 }
@@ -117,13 +115,12 @@ async function send(request) {
   try { payload = await request.json(); }
   catch { return Response.json({ error:'요청 형식이 잘못됐습니다.' }, { status:400 }); }
 
-  const originalTo = clean(payload.to, 320).toLowerCase();
-  const testMode = payload.testMode === true;
-  const to = testMode ? TEST_RECIPIENT : originalTo;
+  const to = clean(payload.to, 320).toLowerCase();
   const subject = clean(payload.subject, 180).replace(/[\r\n]+/g, ' ');
-  const body = String(payload.body || '').trim().slice(0, 12000);
+  const body = String(payload.body || '').replace(/\r/g, '').trim().slice(0, 12000);
+  const testMode = payload.testMode === true;
 
-  if (!validEmail(originalTo)) return Response.json({ error:'받는 사람 이메일을 확인해주세요.' }, { status:400 });
+  if (!validEmail(to)) return Response.json({ error:'받는 사람 이메일을 확인해주세요.' }, { status:400 });
   if (!subject) return Response.json({ error:'메일 제목이 비어 있습니다.' }, { status:400 });
   if (body.length < 20) return Response.json({ error:'메일 본문이 너무 짧습니다.' }, { status:400 });
 
@@ -136,7 +133,6 @@ async function send(request) {
       id:sent.id || null,
       threadId:sent.threadId || null,
       to,
-      originalTo,
       testMode,
       sender:{ email:config.senderEmail, name:config.senderName },
       sentAt:new Date().toISOString()
