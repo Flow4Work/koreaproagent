@@ -50,7 +50,16 @@
     </form>
   </dialog>
 
-  <script src="/mail-templates.js?v=20260801-kbw-mail-review-v3" defer></script>
+  <script>
+    (() => {
+      const migrationKey = 'kpa.mail.signatureSchema';
+      if (localStorage.getItem(migrationKey) !== 'v1') {
+        localStorage.removeItem('kpa.mail.review.drafts.v4');
+        localStorage.setItem(migrationKey, 'v1');
+      }
+    })();
+  </script>
+  <script src="/mail-templates.js?v=20260801-kbw-mail-review-v4" defer></script>
   <script src="/mail-review.js?v=20260801-kbw-mail-review-v5" defer></script>
 </body>
 </html>
