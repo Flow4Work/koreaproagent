@@ -19,6 +19,7 @@
     "api/discover-v2.js": {"maxDuration": 120},
     "api/hunt.js": {"maxDuration": 45},
     "api/diagnostics.js": {"maxDuration": 30},
-    "api/health.js": {"maxDuration": 15}
+    "api/health.js": {"maxDuration": 15},
+    "api/gmail.js": {"maxDuration": 30}
   }
 }
