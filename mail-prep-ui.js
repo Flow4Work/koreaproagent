@@ -99,6 +99,12 @@
 
   sanitizeStoredLeads();
   try {
+    if (typeof mergeLeads === 'function') {
+      const originalMergeLeads = mergeLeads;
+      mergeLeads = incoming => originalMergeLeads((incoming || []).map(safeKbwOffer));
+    }
+  } catch { /* app merge hook is optional */ }
+  try {
     if (typeof state !== 'undefined' && Array.isArray(state.leads)) {
       state.leads = state.leads.map(safeKbwOffer);
       if (typeof saveState === 'function') saveState();
