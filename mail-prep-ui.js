@@ -80,6 +80,43 @@
     root.querySelectorAll?.('a.mail-btn').forEach(prepareMailButton);
   }
 
+  function ensureRowSelectionStyle() {
+    if (document.getElementById('kpaRowSelectionStyle')) return;
+    const style = document.createElement('style');
+    style.id = 'kpaRowSelectionStyle';
+    style.textContent = `
+      .lead-table tbody tr.data-row.row-selectable {
+        cursor: pointer;
+        transition: background .14s ease, box-shadow .14s ease;
+      }
+      .lead-table tbody tr.data-row.row-selected {
+        background: #f1f6ff !important;
+        box-shadow: inset 3px 0 0 #3182f6;
+      }
+      .lead-table tbody tr.data-row.row-selected:hover {
+        background: #eaf2ff !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
+  function syncRowSelection(root = document) {
+    const rows = [];
+    if (root.matches?.('tr.data-row')) rows.push(root);
+    root.querySelectorAll?.('tr.data-row').forEach(row => rows.push(row));
+    rows.forEach(row => {
+      const checkbox = row.querySelector('.lead-check');
+      if (!checkbox) return;
+      row.classList.add('row-selectable');
+      row.classList.toggle('row-selected', checkbox.checked);
+      row.setAttribute('aria-selected', String(checkbox.checked));
+    });
+  }
+
+  function isInteractiveTarget(target) {
+    return Boolean(target.closest?.('a, button, input, select, textarea, label, [role="button"], [contenteditable="true"]'));
+  }
+
   function updateBulkButton() {
     const button = document.getElementById('prepareSelectedBtn');
     if (!button) return;
@@ -99,8 +136,24 @@
     if (id) openReview([id]);
   }, true);
 
+  document.addEventListener('click', event => {
+    const row = event.target.closest?.('tr.data-row');
+    if (!row || isInteractiveTarget(event.target)) return;
+    const checkbox = row.querySelector('.lead-check');
+    if (!checkbox || checkbox.disabled) return;
+    checkbox.checked = !checkbox.checked;
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+    syncRowSelection(row);
+  });
+
   document.addEventListener('change', event => {
-    if (event.target.matches?.('.lead-check')) setTimeout(updateBulkButton, 0);
+    if (!event.target.matches?.('.lead-check')) return;
+    const row = event.target.closest('tr.data-row');
+    setTimeout(() => {
+      updateBulkButton();
+      if (row?.isConnected) syncRowSelection(row);
+      else syncRowSelection();
+    }, 0);
   });
 
   sanitizeStoredLeads();
@@ -119,6 +172,8 @@
   } catch { /* app state is optional on this page */ }
   ensureBulkButton();
   syncMailButtons();
+  ensureRowSelectionStyle();
+  syncRowSelection();
   updateBulkButton();
 
   const observer = new MutationObserver(records => {
@@ -127,8 +182,10 @@
       for (const node of record.addedNodes) {
         if (node.nodeType !== 1) continue;
         syncMailButtons(node);
+        syncRowSelection(node);
       }
     }
+    syncRowSelection();
     updateBulkButton();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
