@@ -4,41 +4,53 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="선택한 영업 후보의 A/B 메일을 검토하고 순차 발송하는 페이지" />
-  <title>메일 준비하기 · 영업 사냥 에이전트</title>
+  <title>메일 준비 · 영업 사냥 에이전트</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/mail-review.css?v=20260801-kbw-mail-review-v1" />
+  <link rel="stylesheet" href="/mail-review.css?v=20260801-kbw-mail-review-v3" />
 </head>
 <body>
   <div class="review-shell">
-    <header class="review-topbar">
-      <a class="back-link" href="/">← 후보 목록</a>
-      <div>
-        <h1>메일 준비하기</h1>
-        <p>받는 주소와 A/B 본문을 확인한 뒤 실제 발송합니다.</p>
-      </div>
-      <button class="ghost" id="gmailConnectBtn" type="button">Gmail 상태 확인</button>
-    </header>
-
     <section class="review-toolbar">
-      <div class="review-summary" id="reviewSummary">불러오는 중…</div>
+      <div class="toolbar-left">
+        <a class="back-link" href="/">← 후보 목록</a>
+        <div class="review-summary" id="reviewSummary">불러오는 중…</div>
+      </div>
       <div class="review-actions">
-        <button class="ghost" id="applyAllA" type="button">전체 A 적용</button>
-        <button class="ghost" id="applyAllB" type="button">전체 B 적용</button>
+        <button class="connection" id="gmailConnectBtn" type="button">Gmail</button>
+        <div class="bulk-template" aria-label="전체 메일 유형 적용">
+          <span>전체</span>
+          <button class="apply-a" id="applyAllA" type="button">A 적용</button>
+          <button class="apply-b" id="applyAllB" type="button">B 적용</button>
+        </div>
         <button class="danger hidden" id="stopSendBtn" type="button">발송 중지</button>
-        <button class="primary" id="sendAllBtn" type="button">전부 보내기</button>
+        <button class="send-all" id="sendAllBtn" type="button">전부 보내기</button>
       </div>
     </section>
-
-    <div class="queue-note" id="queueNote">
-      메일은 한 번에 한 건씩 60~180초 간격으로 발송됩니다. 발송 중에는 이 페이지를 열어두세요.
-    </div>
 
     <main id="mailCards" class="mail-cards"></main>
   </div>
 
+  <dialog id="testSendDialog">
+    <form class="dialog-form" method="dialog">
+      <div class="dialog-head">
+        <strong>테스트 메일 보내기</strong>
+        <button class="dialog-close" value="cancel" aria-label="닫기">×</button>
+      </div>
+      <p class="dialog-context" id="testMailContext"></p>
+      <div class="field">
+        <label for="testRecipient">테스트 수신 주소</label>
+        <input id="testRecipient" type="email" value="treecox19@gmail.com" autocomplete="email" />
+      </div>
+      <div class="dialog-actions">
+        <button class="ghost" value="cancel">취소</button>
+        <button class="test-action" id="confirmTestSend" type="button">테스트 발송</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="/mail-templates.js?v=20260801-kbw-mail-review-v2" defer></script>
-  <script src="/mail-review.js?v=20260801-kbw-mail-review-v2" defer></script>
+  <script src="/mail-review.js?v=20260801-kbw-mail-review-v3" defer></script>
 </body>
 </html>
