@@ -1,15 +1,13 @@
 const KPA_MAIL_SIGNATURE = `Best,
 Leo Park
 NYF · Custom apparel produced in Seoul
-Instagram · @notyourflavor
-Production · @timesewingmachine
+Instagram · @notyourflavor / @timesewingmachine
 7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
 
 const KPA_MAIL_SIGNATURE_KO = `감사합니다.
 Leo Park
 NYF · 서울 커스텀 의류 제작
-Instagram · @notyourflavor
-Production · @timesewingmachine
+Instagram · @notyourflavor / @timesewingmachine
 7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
 
 window.KPA_MAIL_TEMPLATES = {
@@ -24,7 +22,9 @@ If your team is coming to KBW, we can produce and deliver custom T-shirts, hoodi
 
 We deliver straight to your hotel, office, or event venue.
 
-Want a quick list of options with pricing and lead times? Just reply "send it" and I'll have it to you within a day.
+Want a quick list of options with pricing and lead times?
+
+Just reply "send it" and I'll have it to you within a day.
 
 ${KPA_MAIL_SIGNATURE}`,
     translation: company => `안녕하세요, ${company} 팀.
@@ -35,7 +35,9 @@ NYF는 EA SPORTS의 공식 의류 벤더이며, Web3 팀과 페레로로쉐, 국
 
 호텔, 사무실 또는 행사장으로 바로 배송합니다.
 
-가격과 제작 기간을 포함한 간단한 옵션 목록이 필요하다면 "send it"이라고 답장해주세요. 하루 안에 보내드리겠습니다.
+가격과 제작 기간을 포함한 간단한 옵션 목록이 필요하신가요?
+
+"send it"이라고 답장해주시면 하루 안에 보내드리겠습니다.
 
 ${KPA_MAIL_SIGNATURE_KO}`
   },
