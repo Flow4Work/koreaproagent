@@ -66,22 +66,28 @@
     actions.insertBefore(button, document.getElementById('runBtn'));
   }
 
+  function prepareMailButton(anchor) {
+    if (!anchor) return;
+    if (anchor.textContent !== '메일 준비하기') anchor.textContent = '메일 준비하기';
+    if (anchor.hasAttribute('target')) anchor.removeAttribute('target');
+    if (anchor.hasAttribute('rel')) anchor.removeAttribute('rel');
+    if (anchor.getAttribute('href') !== '/mail-review.html') anchor.setAttribute('href', '/mail-review.html');
+    if (anchor.dataset.mailPrepare !== '1') anchor.dataset.mailPrepare = '1';
+  }
+
   function syncMailButtons(root = document) {
-    root.querySelectorAll?.('a.mail-btn').forEach(anchor => {
-      anchor.textContent = '메일 준비하기';
-      anchor.removeAttribute('target');
-      anchor.removeAttribute('rel');
-      anchor.setAttribute('href', '/mail-review.html');
-      anchor.dataset.mailPrepare = '1';
-    });
+    if (root.matches?.('a.mail-btn')) prepareMailButton(root);
+    root.querySelectorAll?.('a.mail-btn').forEach(prepareMailButton);
   }
 
   function updateBulkButton() {
     const button = document.getElementById('prepareSelectedBtn');
     if (!button) return;
     const count = selectedIds().length;
-    button.disabled = count === 0;
-    button.textContent = count ? `선택한 메일 준비하기 (${count})` : '선택한 메일 준비하기';
+    const nextText = count ? `선택한 메일 준비하기 (${count})` : '선택한 메일 준비하기';
+    const nextDisabled = count === 0;
+    if (button.textContent !== nextText) button.textContent = nextText;
+    if (button.disabled !== nextDisabled) button.disabled = nextDisabled;
   }
 
   document.addEventListener('click', event => {
@@ -120,8 +126,7 @@
     for (const record of records) {
       for (const node of record.addedNodes) {
         if (node.nodeType !== 1) continue;
-        if (node.matches?.('a.mail-btn')) syncMailButtons(node.parentElement || document);
-        else syncMailButtons(node);
+        syncMailButtons(node);
       }
     }
     updateBulkButton();
