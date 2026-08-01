@@ -15,7 +15,7 @@ Production · @timesewingmachine
 window.KPA_MAIL_TEMPLATES = {
   A: {
     label: 'A · 신뢰형',
-    subject: company => `Custom apparel for ${company} during KBW`,
+    subject: () => 'Official EA SPORTS merch vendor — now in Seoul for KBW',
     body: company => `Hi ${company} team,
 
 NYF is the official apparel vendor for EA SPORTS, and we've produced branded merch for Web3 teams, Ferrero Rocher, and universities here in Korea.
@@ -41,7 +41,7 @@ ${KPA_MAIL_SIGNATURE_KO}`
   },
   B: {
     label: 'B · 문제해결형',
-    subject: () => 'KBW apparel produced locally in Seoul',
+    subject: () => 'Skip the customs delays — KBW merch produced in Seoul',
     body: company => `Hi ${company} team,
 
 Shipping branded merch into Korea for KBW can mean customs delays and timelines that are difficult to control.
