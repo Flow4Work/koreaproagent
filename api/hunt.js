@@ -1,7 +1,7 @@
 import { tavilyConfigured, tavilySearch, tavilySearchMany } from '../lib/web-search.js';
 
 const ALWAYS_BLOCKED = [
-  'instagram.com','facebook.com','x.com','twitter.com','youtube.com','reddit.com','pinterest.com','linkedin.com',
+  'instagram.com','facebook.com','youtube.com','reddit.com','pinterest.com',
   'wikipedia.org','medium.com','tiktok.com','threads.net'
 ];
 
@@ -11,7 +11,7 @@ const SOURCE_ONLY = [
   'venturesquare.net','besuccess.com','startuprecipe.co.kr','eventbrite.com','meetup.com','festa.io','onoffmix.com',
   'event-us.kr','icoanalytics.org','coinmarketcap.com','coingecko.com','newsis.com','yna.co.kr','mk.co.kr','hankyung.com',
   'cryptorank.io','coinpedia.org','iq.wiki','ninjapromo.io','fintechnews.hk','gfma.org','coinmarketcal.com','beincrypto.com',
-  'koreablockchainweek.com','lu.ma','luma.com','bitcoin.com'
+  'koreablockchainweek.com','lu.ma','luma.com','bitcoin.com','linkedin.com','x.com','twitter.com','ycombinator.com'
 ];
 
 const LARGE_KBW_DOMAINS = new Set([
@@ -22,14 +22,23 @@ const CAMPAIGNS = {
   kbw: {
     label: 'KBW 단체복', market: 'global-to-korea',
     queries: [
+      'site:koreablockchainweek.com/speakers 2026 KBW speaker company protocol startup',
+      'site:koreablockchainweek.com/sponsors 2026 KBW sponsor partner company',
+      'site:linkedin.com/posts/korea-blockchain-week KBW2026 confirmed speaker sponsor Seoul company',
+      '"attending KBW2026" crypto protocol company',
+      '"speaking at KBW2026" crypto web3 company',
+      '"meet us at KBW2026" web3 company',
+      '"heading to Seoul" KBW2026 crypto web3 team',
+      'site:lu.ma 2026 Seoul KBW crypto web3 side event host sponsor protocol startup',
+      '"Korea Blockchain Week 2026" side event host sponsor Seoul protocol',
+      'site:x.com KBW2026 Seoul attending sponsor side event web3',
       '2026 Korea Blockchain Week sponsor speaker partner side event protocol startup Seoul',
-      'site:lu.ma 2026 Seoul KBW crypto web3 side event meetup protocol startup',
       '2026 upcoming TGE token generation mainnet launch emerging crypto protocol startup',
       '2026 web3 startup funding partnership fast growing protocol community launch',
       '2026 crypto project Korea expansion Korean community exchange listing Seoul Asia partnership',
       '2026 KBW Seoul founders team attending networking protocol community no booth'
     ],
-    exaQuery: 'Reachable emerging web3 companies and protocols that are strong sales prospects around Korea Blockchain Week 2026: confirmed Seoul or KBW participation, Luma side events, upcoming TGE or mainnet launch, recent funding or rapid momentum, or active Korea/Asia expansion. Exclude generic crypto pages, media, directories, and major top-market-cap projects.',
+    exaQuery: 'Reachable emerging web3 companies and protocols that are strong sales prospects around Korea Blockchain Week 2026: official KBW speaker or sponsor announcements, company posts confirming attendance or speaking in Seoul, Luma side events and hosts, upcoming TGE or mainnet launch, recent funding or rapid momentum, or active Korea/Asia expansion. Exclude generic crypto pages, media, directories, and major top-market-cap projects.',
     signal: /(kbw|korea blockchain week|seoul|korea|tge|token generation|mainnet|side event|meetup|sponsor|community|conference|summit|launch|funding|raised|partnership|testnet|airdrop|listing|expansion)/i,
     intent: /(host|hosting|organizer|sponsor|side event|meetup|booth|launch|tge|mainnet|activation|funding|raised|partner|listing|expansion|attend|서울|한국|행사|주최|스폰서|밋업|출시|투자|파트너|상장|확장)/i,
     koOffer: '서울 현지에서 티셔츠·후디·스태프 의류를 제작해 호텔·사무실·행사장으로 납품',
@@ -72,12 +81,12 @@ const CAMPAIGNS = {
 const VARIANTS = ['recent announcement upcoming event','small team startup launch partner','2026 expansion community activation','funding tge emerging protocol'];
 const AI_VENDOR = /(ai 솔루션|ai 전문|생성형 ai 스타트업|ai platform|ai company|인공지능 전문기업|automation vendor|rpa 솔루션)/i;
 const AX_BUYER = /(고객센터|고객지원|물류|제조|유통|커머스|여행|교육|금융|보험|병원|프랜차이즈|erp|운영|영업|백오피스|스마트공장|생산)/i;
-const SOURCE_TITLE = /(top\s*\d+|best .*events|events? to attend|conference[s]? .*2026|event calendar|global adoption index|report|guide|list of|news roundup|press release|pr 2026|organizations?\s*\|)/i;
+const SOURCE_TITLE = /(top\s*\d+|best .*events|events? to attend|conference[s]? .*2026|event calendar|global adoption index|report|guide|list of|directory|startups? funded by|companies? funded by|news roundup|press release|pr 2026|organizations?\s*\|)/i;
 const SMALL_TEAM_SIGNAL = /(startup|early[- ]stage|seed|series\s*[abc]|emerging|independent|protocol|project team|small team|community-led|스타트업|중소|신생|초기|시드|프리시드|series a|series b|series c)/i;
 const LARGE_TEAM_SIGNAL = /(fortune\s*500|global leader|market leader|one of the largest|major exchange|enterprise group|conglomerate|대기업|그룹사|업계 최대|국내 최대|글로벌 대형)/i;
 const CRYPTO_SIGNAL = /(crypto|blockchain|web3|defi|exchange|token|tge|mainnet|protocol|layer\s*[12]|l1|l2|wallet|gamefi|가상자산|블록체인|토큰|프로토콜)/i;
 const KBW_NAME = /(kbw|korea blockchain week)/i;
-const KBW_EXPLICIT_PARTICIPATION = /(speaker|speaking|sponsor|sponsoring|official partner|booth|exhibit|exhibitor|host|hosting|organizer|organizing|side event|meetup|attend|attending|participat|activation|연사|스폰서|후원|부스|참가|참여|주최|사이드 이벤트|밋업)/i;
+const KBW_EXPLICIT_PARTICIPATION = /(speaker|speaking|sponsor|sponsoring|official partner|booth|exhibit|exhibitor|host|hosting|organizer|organizing|side event|meetup|attend|attending|participat|activation|confirmed|joining us|will join|see you in seoul|meet us|heading to seoul|looking forward to speaking|연사|스폰서|후원|부스|참가|참여|주최|사이드 이벤트|밋업)/i;
 const KOREA_ACTIVITY = /(seoul|korea|서울|한국)/i;
 const EVENT_ACTIVITY = /(event|meetup|conference|summit|community|sponsor|activation|행사|밋업|컨퍼런스|서밋|스폰서|커뮤니티)/i;
 const MERCH_BUYING_SIGNAL = /(side event|meetup|booth|exhibit|exhibitor|sponsor|activation|community event|team event|staff|merch|shirt|hoodie|행사|밋업|부스|스폰서|후원|커뮤니티|스태프|굿즈|단체복)/i;
@@ -408,8 +417,8 @@ function searchQueries(campaignId, cycle) {
   const campaign = CAMPAIGNS[campaignId];
   if (campaignId !== 'kbw') return campaign.queries.slice(0, 2);
   const pool = campaign.queries;
-  const start = (cycle * 2) % pool.length;
-  return [pool[start], pool[(start + 1) % pool.length]];
+  const start = (cycle * 3) % pool.length;
+  return [pool[start], pool[(start + 1) % pool.length], pool[(start + 2) % pool.length]];
 }
 
 export async function POST(request) {
@@ -420,12 +429,13 @@ export async function POST(request) {
   const excludes = new Set(Array.isArray(body.excludeDomains) ? body.excludeDomains.map(x => String(x).toLowerCase()) : []);
   const exaKey = clean(body?.tools?.exaKey, 300), jinaKey = clean(body?.tools?.jinaKey, 300), braveKey = clean(body?.tools?.braveKey, 300), dartKey = clean(body?.tools?.dartKey, 100);
   const variant = VARIANTS[cycle % VARIANTS.length];
-  const queries = searchQueries(campaignId, cycle).map((q, i) => `${q} ${i === cycle % 2 ? variant : ''}`.trim());
+  const baseQueries = searchQueries(campaignId, cycle);
+  const queries = baseQueries.map((q, i) => `${q} ${i === cycle % baseQueries.length ? variant : ''}`.trim());
   try {
     const top50 = campaignId === 'kbw' ? await loadTop50Coins() : { names: new Set(), source: 'unused' };
     const dartPromise = campaignId === 'ax' && dartKey ? dartLeads(dartKey, excludes, cycle).catch(() => []) : Promise.resolve([]);
-    const search = await tavilySearchMany(queries, { maxResults: 14, timeRange: 'year', excludeDomains: ALWAYS_BLOCKED, topic: 'general' });
-    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, top50.names, 12, 4);
+    const search = await tavilySearchMany(queries, { maxResults: 16, timeRange: 'year', excludeDomains: ALWAYS_BLOCKED, topic: 'general' });
+    let leads = await rowsToLeads(search.results, campaignId, excludes, jinaKey, top50.names, 12, 5);
     let exaUsed = false;
     if (leads.length < 8 && exaKey) {
       try {
@@ -454,7 +464,8 @@ export async function POST(request) {
         ...search.meta, returned: unique.length, cycle, jina_used: Boolean(jinaKey), brave_used: braveUsed, exa_used: exaUsed, opendart_used: dartUsed,
         hard_filter: true, company_entity_filter: true, top50_marketcap_filter: campaignId === 'kbw', top50_source: top50.source,
         opportunity_lanes: campaignId === 'kbw' ? ['confirmed-korea','likely-korea','launch','momentum','korea-expansion'] : [],
-        opportunity_priority: true, language_routing: true, reachability_priority: true, message_schema: 'reply-first-v4', kbw_participation_gate: false
+        opportunity_priority: true, language_routing: true, reachability_priority: true, message_schema: 'reply-first-v4', kbw_participation_gate: false,
+        kbw_direct_search_expanded: campaignId === 'kbw', search_query_count: queries.length
       }
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
