@@ -1,24 +1,16 @@
 const KPA_MAIL_SIGNATURE = `Best,
 Leo Park
-NYF
-Custom apparel produced in Seoul
-
-Instagram: https://www.instagram.com/notyourflavor/
-Production: https://www.instagram.com/timesewingmachine
-
-7-3 Daesagwan-ro 31-gil
-Yongsan-gu, Seoul 04420, South Korea`;
+NYF · Custom apparel produced in Seoul
+Instagram · @notyourflavor
+Production · @timesewingmachine
+7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
 
 const KPA_MAIL_SIGNATURE_KO = `감사합니다.
 Leo Park
-NYF
-서울 커스텀 의류 제작
-
-Instagram: https://www.instagram.com/notyourflavor/
-Production: https://www.instagram.com/timesewingmachine
-
-7-3 Daesagwan-ro 31-gil
-Yongsan-gu, Seoul 04420, South Korea`;
+NYF · 서울 커스텀 의류 제작
+Instagram · @notyourflavor
+Production · @timesewingmachine
+7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
 
 window.KPA_MAIL_TEMPLATES = {
   A: {
@@ -52,20 +44,24 @@ ${KPA_MAIL_SIGNATURE_KO}`
     subject: () => 'KBW apparel produced locally in Seoul',
     body: company => `Hi ${company} team,
 
-Shipping branded merch into Korea for KBW usually means customs delays and timelines you can't control. NYF solves that by producing everything locally in Seoul — T-shirts, hoodies, staff wear — and delivering straight to your hotel, office, or venue, even on short notice.
+Shipping branded merch into Korea for KBW can mean customs delays and timelines that are difficult to control.
+
+NYF produces everything locally in Seoul—from T-shirts and hoodies to staff wear—and delivers directly to your hotel, office, or venue, even on short notice.
 
 We're the official apparel vendor for EA SPORTS and have run similar projects for Web3 teams, Ferrero Rocher, and Korean universities.
 
-Happy to send 2–3 options with pricing and turnaround times — just say the word.
+Happy to send 2–3 options with pricing and turnaround times.
 
 ${KPA_MAIL_SIGNATURE}`,
     translation: company => `안녕하세요, ${company} 팀.
 
-KBW용 브랜드 굿즈를 한국으로 배송하면 통관 지연과 통제하기 어려운 일정 문제가 생기기 쉽습니다. NYF는 티셔츠, 후디, 스태프웨어를 서울에서 직접 제작하고 호텔, 사무실 또는 행사장으로 납품해 이 문제를 해결합니다. 촉박한 일정에도 대응할 수 있습니다.
+KBW용 브랜드 굿즈를 한국으로 배송하면 통관 지연이나 통제하기 어려운 일정 문제가 생길 수 있습니다.
+
+NYF는 티셔츠와 후디부터 스태프웨어까지 모든 제품을 서울에서 제작하고, 호텔·사무실·행사장으로 직접 납품합니다. 촉박한 일정에도 대응할 수 있습니다.
 
 저희는 EA SPORTS 공식 의류 벤더이며 Web3 팀, 페레로로쉐, 국내 대학교의 유사 프로젝트를 진행했습니다.
 
-가격과 제작 기간을 포함한 옵션 2~3개를 보내드릴 수 있습니다. 필요하시면 편하게 답장해주세요.
+가격과 제작 기간을 포함한 옵션 2~3개를 보내드릴 수 있습니다.
 
 ${KPA_MAIL_SIGNATURE_KO}`
   }
