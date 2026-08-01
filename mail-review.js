@@ -1,7 +1,7 @@
 (() => {
   const LEADS_KEY = 'kpa.hunt.leads';
   const IDS_KEY = 'kpa.mail.review.ids';
-  const DRAFT_KEY = 'kpa.mail.review.drafts.v3';
+  const DRAFT_KEY = 'kpa.mail.review.drafts.v4';
   const SENT_PREFIX = 'kpa.gmail.sent.';
   const TEST_RECIPIENT_KEY = 'kpa.mail.test.recipient';
   const DEFAULT_TEST_RECIPIENT = 'treecox19@gmail.com';
@@ -16,7 +16,7 @@
   const validEmail = value => /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean(value, 240));
 
   function companyName(lead = {}) {
-    return clean(lead.company || lead.domain || 'Company', 100).replace(/\s+(team|inc\.?|ltd\.?|labs?)$/i, '').trim() || 'Company';
+    return clean(lead.company || lead.domain || 'Company', 100).replace(/\s+team$/i, '').trim() || 'Company';
   }
   function contactName(contact = {}) { return clean(contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`, 120); }
   function contacts(lead = {}) {
@@ -189,10 +189,10 @@
   }
   async function gmailStatus(force = false) {
     if (state.gmail && !force) return state.gmail;
-    state.gmail = await json(await fetch(`/api/email/status?t=${Date.now()}`, { cache:'no-store', credentials:'same-origin' }));
+    state.gmail = await json(await fetch(`/api/gmail?action=status&t=${Date.now()}`, { cache:'no-store', credentials:'same-origin' }));
     return state.gmail;
   }
-  function connectGmail() { location.href = `/api/email/auth-start?return=${encodeURIComponent(location.pathname + location.search)}`; }
+  function connectGmail() { location.href = `/api/gmail?action=auth&return=${encodeURIComponent(location.pathname + location.search)}`; }
   function paintGmailStatus(status) {
     const button = $('gmailConnectBtn');
     const connected = Boolean(status?.connected);
@@ -223,10 +223,10 @@
   function htmlEmail(body) {
     const paragraphs = String(body || '').split(/\n{2,}/).map(part => part.trim()).filter(Boolean);
     const html = paragraphs.map(part => `<p style="margin:0 0 16px 0;">${esc(part).replace(/\n/g, '<br>')}</p>`).join('');
-    return `<div style="margin:0;padding:0;background:#ffffff;"><div style="max-width:580px;margin:0;padding:0 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">${html}</div></div>`;
+    return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#ffffff;"><tr><td align="left"><table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:580px;margin:0;"><tr><td style="box-sizing:border-box;padding:0 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">${html}</td></tr></table></td></tr></table>`;
   }
   async function postEmail(to, subject, body) {
-    const response = await fetch('/api/email/send', {
+    const response = await fetch('/api/gmail', {
       method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', cache:'no-store',
       body:JSON.stringify({ to:to.trim(), subject:subject.trim(), body:body.trim(), html:htmlEmail(body) })
     });
