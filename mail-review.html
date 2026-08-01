@@ -53,13 +53,13 @@
   <script>
     (() => {
       const migrationKey = 'kpa.mail.signatureSchema';
-      if (localStorage.getItem(migrationKey) !== 'v1') {
+      if (localStorage.getItem(migrationKey) !== 'v2') {
         localStorage.removeItem('kpa.mail.review.drafts.v4');
-        localStorage.setItem(migrationKey, 'v1');
+        localStorage.setItem(migrationKey, 'v2');
       }
     })();
   </script>
-  <script src="/mail-templates.js?v=20260801-kbw-mail-review-v4" defer></script>
+  <script src="/mail-templates.js?v=20260801-kbw-mail-review-v5" defer></script>
   <script src="/mail-review.js?v=20260801-kbw-mail-review-v5" defer></script>
 </body>
 </html>
