@@ -32,15 +32,23 @@ const CAMPAIGNS = {
       'site:lu.ma 2026 Seoul KBW crypto web3 side event host sponsor protocol startup',
       '"Korea Blockchain Week 2026" side event host sponsor Seoul protocol',
       'site:x.com KBW2026 Seoul attending sponsor side event web3',
+      '2026 KBW Seoul web3 event agency production agency organizer staff merch',
+      '2026 KBW hackathon builder house developer summit Seoul host sponsor',
+      '2026 KBW founders investors brunch VC accelerator demo day Seoul',
+      '2026 KBW community partner ambassador meetup ecosystem Seoul',
+      '2026 KBW media partner crypto PR research breakfast Seoul',
+      '2026 KBW gaming NFT culture community event Seoul',
+      '2026 KBW institutional stablecoin custody compliance forum dinner Seoul',
+      'site:lu.ma KBW 2026 Seoul "Hosted by" "Co-host" sponsor web3',
       '2026 Korea Blockchain Week sponsor speaker partner side event protocol startup Seoul',
       '2026 upcoming TGE token generation mainnet launch emerging crypto protocol startup',
       '2026 web3 startup funding partnership fast growing protocol community launch',
       '2026 crypto project Korea expansion Korean community exchange listing Seoul Asia partnership',
       '2026 KBW Seoul founders team attending networking protocol community no booth'
     ],
-    exaQuery: 'Reachable emerging web3 companies and protocols that are strong sales prospects around Korea Blockchain Week 2026: official KBW speaker or sponsor announcements, company posts confirming attendance or speaking in Seoul, Luma side events and hosts, upcoming TGE or mainnet launch, recent funding or rapid momentum, or active Korea/Asia expansion. Exclude generic crypto pages, media, directories, and major top-market-cap projects.',
-    signal: /(kbw|korea blockchain week|seoul|korea|tge|token generation|mainnet|side event|meetup|sponsor|community|conference|summit|launch|funding|raised|partnership|testnet|airdrop|listing|expansion)/i,
-    intent: /(host|hosting|organizer|sponsor|side event|meetup|booth|launch|tge|mainnet|activation|funding|raised|partner|listing|expansion|attend|서울|한국|행사|주최|스폰서|밋업|출시|투자|파트너|상장|확장)/i,
+    exaQuery: 'Reachable emerging web3 companies and organizations likely to need local apparel around Korea Blockchain Week 2026: official speakers and sponsors, company attendance posts, Luma hosts and co-hosts, web3 event agencies, hackathons and builder houses, VC or accelerator founder events, community and ambassador groups, media or research partners, gaming and NFT communities, institutional stablecoin custody or compliance forums, upcoming TGE or mainnet launches, recent funding, or Korea expansion. Exclude generic pages, media articles, directories, and major top-market-cap projects.',
+    signal: /(kbw|korea blockchain week|seoul|korea|tge|token generation|mainnet|side event|meetup|sponsor|community|conference|summit|launch|funding|raised|partnership|testnet|airdrop|listing|expansion|event agency|production agency|hackathon|builder house|developer summit|demo day|brunch|investor|accelerator|ambassador|media partner|research|gaming|nft|institutional|stablecoin|custody|compliance|forum|dinner|co-host)/i,
+    intent: /(host|hosting|organizer|organizing|co-host|sponsor|side event|meetup|booth|hackathon|builder house|demo day|brunch|investor|accelerator|ambassador|media partner|research|gaming|institutional|forum|dinner|launch|tge|mainnet|activation|funding|raised|partner|listing|expansion|attend|서울|한국|행사|주최|공동주최|스폰서|밋업|해커톤|빌더|데모데이|브런치|투자자|액셀러레이터|앰배서더|미디어|리서치|포럼|디너|출시|투자|파트너|상장|확장)/i,
     koOffer: '서울 현지에서 티셔츠·후디·스태프 의류를 제작해 호텔·사무실·행사장으로 납품',
     enOffer: 'local Seoul production for team shirts, staff tees, hoodies and event merch with delivery to your hotel, office or venue'
   },
@@ -84,12 +92,12 @@ const AX_BUYER = /(고객센터|고객지원|물류|제조|유통|커머스|여�
 const SOURCE_TITLE = /(top\s*\d+|best .*events|events? to attend|conference[s]? .*2026|event calendar|global adoption index|report|guide|list of|directory|startups? funded by|companies? funded by|news roundup|press release|pr 2026|organizations?\s*\|)/i;
 const SMALL_TEAM_SIGNAL = /(startup|early[- ]stage|seed|series\s*[abc]|emerging|independent|protocol|project team|small team|community-led|스타트업|중소|신생|초기|시드|프리시드|series a|series b|series c)/i;
 const LARGE_TEAM_SIGNAL = /(fortune\s*500|global leader|market leader|one of the largest|major exchange|enterprise group|conglomerate|대기업|그룹사|업계 최대|국내 최대|글로벌 대형)/i;
-const CRYPTO_SIGNAL = /(crypto|blockchain|web3|defi|exchange|token|tge|mainnet|protocol|layer\s*[12]|l1|l2|wallet|gamefi|가상자산|블록체인|토큰|프로토콜)/i;
+const CRYPTO_SIGNAL = /(crypto|blockchain|web3|defi|exchange|token|tge|mainnet|protocol|layer\s*[12]|l1|l2|wallet|gamefi|nft|stablecoin|custody|digital asset|가상자산|블록체인|토큰|프로토콜|스테이블코인|커스터디)/i;
 const KBW_NAME = /(kbw|korea blockchain week)/i;
 const KBW_EXPLICIT_PARTICIPATION = /(speaker|speaking|sponsor|sponsoring|official partner|booth|exhibit|exhibitor|host|hosting|organizer|organizing|side event|meetup|attend|attending|participat|activation|confirmed|joining us|will join|see you in seoul|meet us|heading to seoul|looking forward to speaking|연사|스폰서|후원|부스|참가|참여|주최|사이드 이벤트|밋업)/i;
 const KOREA_ACTIVITY = /(seoul|korea|서울|한국)/i;
-const EVENT_ACTIVITY = /(event|meetup|conference|summit|community|sponsor|activation|행사|밋업|컨퍼런스|서밋|스폰서|커뮤니티)/i;
-const MERCH_BUYING_SIGNAL = /(side event|meetup|booth|exhibit|exhibitor|sponsor|activation|community event|team event|staff|merch|shirt|hoodie|행사|밋업|부스|스폰서|후원|커뮤니티|스태프|굿즈|단체복)/i;
+const EVENT_ACTIVITY = /(event|meetup|conference|summit|community|sponsor|activation|hackathon|builder house|demo day|brunch|forum|dinner|media|gaming|행사|밋업|컨퍼런스|서밋|스폰서|커뮤니티|해커톤|빌더|데모데이|브런치|포럼|디너|미디어)/i;
+const MERCH_BUYING_SIGNAL = /(side event|meetup|booth|exhibit|exhibitor|sponsor|activation|community event|team event|staff|merch|shirt|hoodie|event agency|production agency|hackathon|builder house|developer summit|demo day|brunch|ambassador|media partner|research breakfast|gaming event|nft event|institutional forum|stablecoin forum|custody forum|compliance forum|dinner|co-host|행사|밋업|부스|스폰서|후원|커뮤니티|스태프|굿즈|단체복|행사대행|해커톤|빌더|데모데이|브런치|앰배서더|미디어|게임|포럼|디너|공동주최)/i;
 const LAUNCH_SIGNAL = /(tge|token generation|token launch|mainnet(?: launch)?|testnet(?: launch)?|launchpool|launchpad|airdrop|genesis|출시|토큰 생성|메인넷|테스트넷|에어드롭)/i;
 const MOMENTUM_SIGNAL = /(raised|raises|funding|funded|seed round|series\s*[abc]|strategic round|investment|backed by|partnership|partners with|ecosystem growth|user growth|tvl|volume|adoption|grant|accelerator|투자 유치|펀딩|파트너십|성장|사용자 증가|거래량)/i;
 const KOREA_EXPANSION_SIGNAL = /((seoul|korea|한국|서울).{0,80}(listing|exchange|community|partner|expansion|market|meetup|conference|launch|상장|거래소|커뮤니티|파트너|확장|시장|밋업|행사))|((listing|exchange|community|partner|expansion|market|meetup|conference|launch|상장|거래소|커뮤니티|파트너|확장|시장|밋업|행사).{0,80}(seoul|korea|한국|서울))/i;
@@ -247,9 +255,9 @@ function scoreRow(row, id, text, domain, verifiedDirect = false) {
 
 function roleFor(id, signal = '') {
   if (id === 'kbw') {
-    if (/(side event|meetup|booth|sponsor|activation|행사|밋업|스폰서)/i.test(signal)) return 'Events Lead';
+    if (/(side event|meetup|booth|sponsor|activation|hackathon|builder house|demo day|brunch|forum|dinner|event agency|production agency|행사|밋업|스폰서|해커톤|데모데이|브런치|포럼|디너)/i.test(signal)) return 'Events Lead';
     if (LAUNCH_SIGNAL.test(signal)) return 'Head of Marketing';
-    if (/(partner|partnership|expansion|파트너|확장)/i.test(signal)) return 'Partnerships Lead';
+    if (/(partner|partnership|expansion|accelerator|investor|media|research|ambassador|파트너|확장|액셀러레이터|투자자|미디어|앰배서더)/i.test(signal)) return 'Partnerships Lead';
     return 'Community Lead';
   }
   if (id === 'apparel') return /(기업|워크숍|체육대회)/i.test(signal) ? '행사 담당자' : 'Marketing Lead';
@@ -269,7 +277,7 @@ function roleTargets(id, signal = '') {
 function offerFor(id, c, signal = '') {
   if (id === 'kbw') {
     if (LAUNCH_SIGNAL.test(signal)) return 'TGE·출시 일정과 KBW 방한 가능성에 맞춰 팀웨어·스태프 의류·굿즈를 서울 현지에서 제작·납품';
-    if (/(side event|meetup|booth|sponsor|activation|행사|밋업|스폰서)/i.test(signal)) return 'KBW 사이드 이벤트·밋업용 티셔츠·후디·스태프 의류를 서울 현지에서 소량부터 제작·납품';
+    if (/(side event|meetup|booth|sponsor|activation|hackathon|builder house|demo day|brunch|forum|dinner|event agency|production agency|행사|밋업|스폰서|해커톤|데모데이|브런치|포럼|디너)/i.test(signal)) return 'KBW 사이드 이벤트·해커톤·커뮤니티 행사·포럼용 티셔츠·후디·스태프 의류를 서울 현지에서 소량부터 제작·납품';
     return 'KBW 기간 서울 방문 일정이 잡히면 팀웨어·스태프 의류·간단한 행사 굿즈를 현지에서 제작·납품';
   }
   return c.koOffer;
@@ -292,7 +300,7 @@ function bestEvidence(text, id, fallback = '') {
     let score = 0;
     if (c.signal.test(part)) score += 4;
     if (c.intent.test(part)) score += 5;
-    if (/(2026|recent|upcoming|announc|launch|host|sponsor|meetup|event|funding|raised|partner|listing|서울|한국|예정|개최|출시|투자|파트너|상장)/i.test(part)) score += 3;
+    if (/(2026|recent|upcoming|announc|launch|host|sponsor|meetup|event|funding|raised|partner|listing|hackathon|builder|demo day|brunch|media|research|gaming|institutional|forum|dinner|서울|한국|예정|개최|출시|투자|파트너|상장)/i.test(part)) score += 3;
     if (id === 'kbw' && KBW_NAME.test(part)) score += 4;
     if (id === 'kbw' && KBW_EXPLICIT_PARTICIPATION.test(part)) score += 4;
     if (id === 'kbw' && (LAUNCH_SIGNAL.test(part) || MOMENTUM_SIGNAL.test(part))) score += 4;
@@ -463,9 +471,9 @@ export async function POST(request) {
       meta: {
         ...search.meta, returned: unique.length, cycle, jina_used: Boolean(jinaKey), brave_used: braveUsed, exa_used: exaUsed, opendart_used: dartUsed,
         hard_filter: true, company_entity_filter: true, top50_marketcap_filter: campaignId === 'kbw', top50_source: top50.source,
-        opportunity_lanes: campaignId === 'kbw' ? ['confirmed-korea','likely-korea','launch','momentum','korea-expansion'] : [],
+        opportunity_lanes: campaignId === 'kbw' ? ['confirmed-korea','likely-korea','launch','momentum','korea-expansion','event-agency','builder-hackathon','investor-event','community-ambassador','media-research','gaming-nft','institutional-forum'] : [],
         opportunity_priority: true, language_routing: true, reachability_priority: true, message_schema: 'reply-first-v4', kbw_participation_gate: false,
-        kbw_direct_search_expanded: campaignId === 'kbw', search_query_count: queries.length
+        kbw_direct_search_expanded: campaignId === 'kbw', kbw_buyer_segments_expanded: campaignId === 'kbw', search_query_count: queries.length
       }
     }, { headers: { 'Cache-Control': 'no-store' } });
   } catch (error) {
