@@ -104,6 +104,7 @@ async function send(request) {
   }
 
   const originalTo = clean(payload.to, 320).toLowerCase();
+  const companyKey = clean(payload.companyKey, 500) || originalTo;
   const testMode = payload.testMode === true;
   const to = testMode ? TEST_RECIPIENT : originalTo;
   const subject = clean(payload.subject, 180).replace(/[\r\n]+/g, ' ');
@@ -124,7 +125,7 @@ async function send(request) {
 
     if (!isTestMessage) {
       try {
-        await markCompanySent(originalTo, config.sessionSecret, sentAt);
+        await markCompanySent(companyKey, config.sessionSecret, sentAt);
         historySaved = true;
       } catch (error) {
         historySaved = false;
