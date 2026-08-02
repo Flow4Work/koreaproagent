@@ -1,5 +1,5 @@
 (() => {
-  const ENDPOINT = '/api/sent-companies';
+  const ENDPOINT = '/api/gmail?action=sent-companies';
 
   function companyKey(lead = {}) {
     return lead.domain || lead.url || lead.contact?.email || lead.company || '';
