@@ -18,6 +18,7 @@
   function companyName(lead = {}) {
     return clean(lead.company || lead.domain || 'Company', 100).replace(/\s+team$/i, '').trim() || 'Company';
   }
+  function companyKey(lead = {}) { return clean(lead.domain || lead.url || lead.contact?.email || '', 500); }
   function contactName(contact = {}) { return clean(contact.name || `${contact.first_name || ''} ${contact.last_name || ''}`, 120); }
   function contacts(lead = {}) {
     const seen = new Set();
@@ -225,10 +226,10 @@
     const html = paragraphs.map(part => `<p style="margin:0 0 16px 0;">${esc(part).replace(/\n/g, '<br>')}</p>`).join('');
     return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;margin:0;padding:0;background:#ffffff;"><tr><td align="left"><table role="presentation" width="580" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:580px;margin:0;"><tr><td style="box-sizing:border-box;padding:0 18px;font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#111827;">${html}</td></tr></table></td></tr></table>`;
   }
-  async function postEmail(to, subject, body) {
+  async function postEmail(to, subject, body, company = '') {
     const response = await fetch('/api/gmail', {
       method:'POST', headers:{'Content-Type':'application/json'}, credentials:'same-origin', cache:'no-store',
-      body:JSON.stringify({ to:to.trim(), subject:subject.trim(), body:body.trim(), html:htmlEmail(body) })
+      body:JSON.stringify({ to:to.trim(), subject:subject.trim(), body:body.trim(), html:htmlEmail(body), companyKey:clean(company, 500) })
     });
     const data = await response.json().catch(() => ({}));
     if (response.status === 401 || data.code === 'GMAIL_RECONNECT_REQUIRED') throw new Error('Gmail 연결이 만료되었습니다.');
@@ -236,8 +237,9 @@
     return data;
   }
   async function send(item) {
-    await postEmail(item.to, item.subject, item.body);
+    const data = await postEmail(item.to, item.subject, item.body, companyKey(item.lead));
     localStorage.setItem(sentKey(item), new Date().toISOString());
+    if (data.historySaved === false) item.error = data.historyWarning || '메일은 발송됐지만 발송 이력 저장에 실패했습니다.';
   }
 
   function openTestDialog() {
@@ -265,7 +267,7 @@
     const button = $('confirmTestSend');
     button.disabled = true; button.textContent = '발송 중…';
     try {
-      await postEmail(to, `[TEST] ${item.subject}`, item.body);
+      await postEmail(to, `[TEST] ${item.subject}`, item.body, companyKey(item.lead));
       localStorage.setItem(TEST_RECIPIENT_KEY, to);
       $('testSendDialog').close();
       alert(`테스트 메일을 ${to}로 보냈습니다.`);
