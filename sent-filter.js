@@ -23,6 +23,10 @@
     return new Set(Array.isArray(data.sentIds) ? data.sentIds : []);
   }
 
+  function notifySuppressed(count = 0) {
+    window.KPASentHistory?.notifySuppressed?.(count);
+  }
+
   async function removeExistingSentLeads() {
     if (typeof state === 'undefined' || !Array.isArray(state.leads) || !state.leads.length) return;
     const sentIds = await sentIdsFor(state.leads);
@@ -32,6 +36,7 @@
     for (const id of sentIds) state.selected?.delete?.(id);
     if (typeof saveState === 'function') saveState();
     if (typeof render === 'function') render();
+    notifySuppressed(sentIds.size);
   }
 
   if (typeof post === 'function') {
@@ -44,6 +49,7 @@
       if (sentIds.size) {
         result.leads = result.leads.filter((lead, index) => !sentIds.has(leadId(lead, index)));
         result.meta = { ...(result.meta || {}), sent_suppressed: sentIds.size };
+        notifySuppressed(sentIds.size);
       }
       return result;
     };
