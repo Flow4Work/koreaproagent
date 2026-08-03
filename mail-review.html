@@ -58,7 +58,6 @@
         'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
         'yahoo.com', 'icloud.com', 'me.com', 'proton.me', 'protonmail.com'
       ]);
-      const validEmail = value => /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(String(value || '').trim());
       const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       const domainFrom = value => {
         let text = String(value || '').trim().toLowerCase();
@@ -140,64 +139,15 @@
         }
       } catch {}
 
-      const nativeFetch = window.fetch.bind(window);
-      window.fetch = async (input, init = {}) => {
-        const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
-        const method = String(init.method || (typeof input !== 'string' && input.method) || 'GET').toUpperCase();
-        const isMailSend = url.pathname === '/api/gmail' && method === 'POST' && (!url.searchParams.get('action') || url.searchParams.get('action') === 'send');
-        if (!isMailSend || !init.body) return nativeFetch(input, init);
-
-        let payload;
-        try { payload = JSON.parse(init.body); } catch { return nativeFetch(input, init); }
-        if (!payload?.to || /^\[TEST\]\s*/i.test(String(payload.subject || '')) || payload.testMode === true) return nativeFetch(input, init);
-
-        let leads = [];
-        try { leads = JSON.parse(localStorage.getItem(leadsKey) || '[]'); } catch {}
-        const payloadKey = String(payload.companyKey || '').trim().toLowerCase();
-        const payloadTo = String(payload.to || '').trim().toLowerCase();
-        const lead = Array.isArray(leads) ? leads.find(item => {
-          const emails = [item?.contact?.email, ...(Array.isArray(item?.contacts) ? item.contacts.map(contact => contact?.email) : [])]
-            .map(email => String(email || '').trim().toLowerCase());
-          const keys = [item?.domain, item?.url, item?.contact?.email].map(value => String(value || '').trim().toLowerCase());
-          return emails.includes(payloadTo) || (payloadKey && keys.includes(payloadKey));
-        }) : null;
-        const recipients = [...new Set([
-          payloadTo,
-          lead?.contact?.email,
-          ...(Array.isArray(lead?.contacts) ? lead.contacts.map(contact => contact?.email) : [])
-        ].map(email => String(email || '').trim().toLowerCase()).filter(validEmail))].slice(0, 4);
-        if (recipients.length <= 1) return nativeFetch(input, init);
-
-        const results = await Promise.all(recipients.map(async to => {
-          const response = await nativeFetch(input, { ...init, body: JSON.stringify({ ...payload, to }) });
-          const text = await response.text();
-          let data = {};
-          try { data = text ? JSON.parse(text) : {}; } catch {}
-          return { to, ok: response.ok, status: response.status, data };
-        }));
-        const failed = results.filter(result => !result.ok);
-        if (failed.length) {
-          return new Response(JSON.stringify({
-            error: `${recipients.length}개 주소 중 ${failed.length}개 발송 실패: ${failed.map(result => result.to).join(', ')}`,
-            sent: results.filter(result => result.ok).map(result => result.to),
-            failed: failed.map(result => result.to)
-          }), { status: failed[0].status || 502, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } });
-        }
-        const primary = results.find(result => result.to === payloadTo) || results[0];
-        return new Response(JSON.stringify({ ...primary.data, recipients, sentCount: recipients.length }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }
-        });
-      };
-
-      if (localStorage.getItem(migrationKey) !== 'v6') {
+      if (localStorage.getItem(migrationKey) !== 'v7') {
         localStorage.removeItem('kpa.mail.review.drafts.v4');
-        localStorage.setItem(migrationKey, 'v6');
+        localStorage.removeItem('kpa.mail.review.drafts.v5');
+        localStorage.setItem(migrationKey, 'v7');
       }
     })();
   </script>
   <script src="/mail-templates.js?v=20260801-kbw-mail-review-v7" defer></script>
   <script src="/sent-history.js?v=20260802-sent-history-ui-v1" defer></script>
-  <script src="/mail-review.js?v=20260803-company-name-multisend-v2" defer></script>
+  <script src="/mail-review.js?v=20260803-visible-multi-contact-v1" defer></script>
 </body>
 </html>
