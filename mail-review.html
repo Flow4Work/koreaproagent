@@ -53,14 +53,73 @@
   <script>
     (() => {
       const migrationKey = 'kpa.mail.signatureSchema';
-      if (localStorage.getItem(migrationKey) !== 'v4') {
+      const leadsKey = 'kpa.hunt.leads';
+      const genericDomains = new Set([
+        'gmail.com', 'googlemail.com', 'outlook.com', 'hotmail.com', 'live.com',
+        'yahoo.com', 'icloud.com', 'me.com', 'proton.me', 'protonmail.com'
+      ]);
+      const normalize = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      const domainFrom = value => {
+        let text = String(value || '').trim().toLowerCase();
+        if (text.includes('@')) text = text.split('@').pop();
+        text = text.replace(/^https?:\/\//, '').replace(/^www\./, '').split(/[/?#]/)[0].replace(/:\d+$/, '');
+        return /^[a-z0-9.-]+\.[a-z]{2,}$/.test(text) ? text : '';
+      };
+      const domainLabel = domain => {
+        const parts = String(domain || '').split('.').filter(Boolean);
+        if (parts.length < 2) return '';
+        const secondLevel = new Set(['co', 'com', 'net', 'org', 'ac', 'go']);
+        const index = parts.length >= 3 && secondLevel.has(parts[parts.length - 2]) ? parts.length - 3 : parts.length - 2;
+        return parts[index] || '';
+      };
+      const displayDomain = label => String(label || '')
+        .split(/[-_]+/)
+        .filter(Boolean)
+        .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(' ');
+
+      try {
+        const leads = JSON.parse(localStorage.getItem(leadsKey) || '[]');
+        let changed = false;
+        if (Array.isArray(leads)) {
+          leads.forEach(lead => {
+            const raw = String(lead?.company || '').trim();
+            const shortName = raw
+              .split(/\s*(?::|\||—|–)\s*/)[0]
+              .replace(/\s+-\s+.*$/, '')
+              .replace(/\s+team$/i, '')
+              .trim();
+            const values = [
+              lead?.contact?.email,
+              ...(Array.isArray(lead?.contacts) ? lead.contacts.map(contact => contact?.email) : []),
+              lead?.domain,
+              lead?.url
+            ];
+            const verifiedDomain = values
+              .map(domainFrom)
+              .find(domain => domain && !genericDomains.has(domain)) || '';
+            const label = domainLabel(verifiedDomain);
+            const companyToken = normalize(shortName);
+            const domainToken = normalize(label);
+            const matchesDomain = shortName && (!domainToken || companyToken === domainToken || companyToken.includes(domainToken) || domainToken.includes(companyToken));
+            const nextName = matchesDomain ? shortName : (displayDomain(label) || shortName || 'Company');
+            if (nextName !== lead.company) {
+              lead.company = nextName;
+              changed = true;
+            }
+          });
+          if (changed) localStorage.setItem(leadsKey, JSON.stringify(leads));
+        }
+      } catch {}
+
+      if (localStorage.getItem(migrationKey) !== 'v5') {
         localStorage.removeItem('kpa.mail.review.drafts.v4');
-        localStorage.setItem(migrationKey, 'v4');
+        localStorage.setItem(migrationKey, 'v5');
       }
     })();
   </script>
   <script src="/mail-templates.js?v=20260801-kbw-mail-review-v7" defer></script>
   <script src="/sent-history.js?v=20260802-sent-history-ui-v1" defer></script>
-  <script src="/mail-review.js?v=20260802-sent-history-ui-v1" defer></script>
+  <script src="/mail-review.js?v=20260803-company-name-v1" defer></script>
 </body>
 </html>
