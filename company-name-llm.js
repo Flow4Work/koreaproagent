@@ -25,12 +25,12 @@
 
     let response;
     try {
-      response = await fetch('/api/company-names', {
+      response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type':'application/json' },
         credentials: 'same-origin',
         cache: 'no-store',
-        body: JSON.stringify({ items: targets })
+        body: JSON.stringify({ action: 'company_names', items: targets })
       });
     } catch { return; }
 
