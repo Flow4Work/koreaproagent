@@ -109,7 +109,11 @@ export async function POST(request) {
       }
 
       qualified = qualifyContacts([...contactMap.values()], roles, 4);
-      if (qualified.sendable.length >= 2) break;
+      const externalAvailable = (result?.attempts || []).some(attempt =>
+        ['prospeo','apollo','tomba'].includes(attempt.provider) && attempt.status !== 'skipped'
+      );
+      const hasQualifiedPerson = qualified.sendable.some(contact => contact.qualificationCode === 'qualified_personal_contact');
+      if (hasQualifiedPerson || qualified.sendable.length >= 2 || !externalAvailable) break;
     }
 
     const failure = qualified.sendable.length ? null : summarizeContactFailure(qualified.fallback, attempts);
