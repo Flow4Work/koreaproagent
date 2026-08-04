@@ -23,7 +23,7 @@
     "api/discover-clients.js": {"maxDuration": 120},
     "api/discover-v2.js": {"maxDuration": 120},
     "api/hunt.js": {"maxDuration": 45},
-    "api/hunt-v2.js": {"maxDuration": 45},
+    "api/contact.js": {"maxDuration": 120},
     "api/diagnostics.js": {"maxDuration": 30},
     "api/health.js": {"maxDuration": 15}
   }
