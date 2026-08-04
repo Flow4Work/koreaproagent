@@ -1,6 +1,6 @@
 (() => {
   const MATCH_ENDPOINT = '/api/gmail?action=sent-companies';
-  const DOMAIN_ENDPOINT = '/api/sent-domains';
+  const DOMAIN_ENDPOINT = '/api/gmail?action=sent-domains';
   const SEEN_DOMAINS_KEY = 'kpa.hunt.seenDomains.v1';
   const SENT_DOMAINS_CACHE_KEY = 'kpa.hunt.sentDomains.v1';
   const SENT_DOMAINS_CACHE_TTL = 5 * 60 * 1000;
@@ -156,7 +156,7 @@
         ...(payload || {}),
         excludeDomains: mergeExclusions(payload, sent)
       };
-      const result = await originalPost('/api/hunt-v2', requestPayload, timeout);
+      const result = await originalPost('/api/contact', { ...requestPayload, action: 'hunt_v2' }, timeout);
       if (!Array.isArray(result?.leads) || !result.leads.length) return result;
 
       const sentSet = new Set(sent);
