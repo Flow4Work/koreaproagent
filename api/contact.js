@@ -1,4 +1,5 @@
 import { findContacts, normalizeContacts } from '../lib/contact-discovery.js';
+import { qualifyContacts, summarizeContactFailure } from '../lib/contact-qualification.js';
 import { aiConfigured, chatJson } from '../lib/ai-provider.js';
 
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -67,6 +68,10 @@ ${JSON.stringify(items)}`;
   }
 }
 
+function contactKey(contact = {}) {
+  return clean(contact.email || contact.linkedinUrl || contact.name, 220).toLowerCase();
+}
+
 export async function POST(request) {
   let body = {};
   try { body = await request.json(); }
@@ -77,37 +82,47 @@ export async function POST(request) {
   const url = clean(body.url, 500);
   const recommendedRole = clean(body.recommendedRole, 120) || 'Operations Lead';
   const roleTargets = Array.isArray(body.roleTargets) ? body.roleTargets.map(role => clean(role, 120)).filter(Boolean) : [];
-  const fallbackRoles = ['Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Founder','CEO'];
+  const fallbackRoles = ['Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Events Lead','Founder','CEO'];
   const roles = [...new Set([recommendedRole, ...roleTargets, ...fallbackRoles])].slice(0, 5);
   if (!url) return Response.json({ error: '회사 URL이 필요합니다.' }, { status: 400 });
 
   try {
-    const contacts = [];
-    const seen = new Set();
+    const contactMap = new Map();
     const providers = [];
     const attempts = [];
+    let qualified = { sendable: [], fallback: [] };
 
     for (const role of roles) {
-      if (contacts.length >= 4) break;
-      const result = await findContacts(url, { maxContacts: 8, minContacts: 4, recommendedRole: role });
+      const result = await findContacts(url, {
+        maxContacts: 10,
+        minContacts: 10,
+        recommendedRole: role
+      });
       if (result?.provider) providers.push(...String(result.provider).split('+').filter(Boolean));
       for (const attempt of result?.attempts || []) attempts.push({ ...attempt, role });
+
       for (const contact of normalizeContacts(result?.emails || [], role)) {
-        const key = clean(contact.email || contact.linkedinUrl || contact.name, 220).toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        contacts.push(contact);
-        if (contacts.length >= 4) break;
+        const key = contactKey(contact);
+        if (!key) continue;
+        const previous = contactMap.get(key);
+        if (!previous || Number(contact.score || 0) > Number(previous.score || 0)) contactMap.set(key, contact);
       }
+
+      qualified = qualifyContacts([...contactMap.values()], roles, 4);
+      if (qualified.sendable.length >= 2) break;
     }
 
-    contacts.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+    const failure = qualified.sendable.length ? null : summarizeContactFailure(qualified.fallback, attempts);
     return Response.json({
-      contact: contacts[0] || null,
-      contacts: contacts.slice(0, 4),
+      contact: qualified.sendable[0] || null,
+      contacts: qualified.sendable,
+      fallback_contacts: qualified.fallback,
       provider: [...new Set(providers)].join('+') || null,
       attempts,
-      target_contacts: 4
+      target_contacts: 4,
+      qualification_policy: 'strict-role-email-v1',
+      failure_code: failure?.code || null,
+      failure_reason: failure?.reason || null
     }, { headers: { 'Cache-Control':'no-store' } });
   } catch (error) {
     return Response.json({ error: safeError(error?.message || error) }, { status: 502 });
