@@ -3,21 +3,29 @@ import { aiConfigured, chatJson } from '../lib/ai-provider.js';
 
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function safeError(value = '') { return String(value).replace(/[A-Za-z0-9_-]{32,}/g, '[key]').slice(0, 500); }
+function normalizeCompanyName(value = '') {
+  const original = clean(value, 160);
+  const normalized = original
+    .replace(/\s*(?:[·|:—–-]\s*)?(?:events?\s+list|list\s+of\s+events)\s*$/i, '')
+    .trim();
+  return normalized || original;
+}
 
 async function cleanCompanyNames(body = {}) {
-  if (!aiConfigured()) {
-    return Response.json({ error: '회사명 검증용 LLM이 연결되어 있지 않습니다.' }, { status: 503, headers: { 'Cache-Control':'no-store' } });
-  }
-
   const items = (Array.isArray(body.items) ? body.items : []).slice(0, 30).map(item => ({
     id: clean(item?.id, 160),
-    current_name: clean(item?.company, 160),
+    current_name: normalizeCompanyName(item?.company),
     domain: clean(item?.domain, 180),
     source_title: clean(item?.source_title, 260),
     source_url: clean(item?.source_url, 300)
   })).filter(item => item.id && item.current_name);
 
   if (!items.length) return Response.json({ names: [] }, { headers: { 'Cache-Control':'no-store' } });
+
+  const fallbackNames = items.map(item => ({ id:item.id, name:item.current_name }));
+  if (!aiConfigured()) {
+    return Response.json({ names:fallbackNames, model:null, fallback:true }, { headers: { 'Cache-Control':'no-store' } });
+  }
 
   const prompt = `You clean company names only for a cold-email greeting shaped as: Hi {company} team,
 
@@ -43,12 +51,19 @@ ${JSON.stringify(items)}`;
   try {
     const result = await chatJson({ prompt, maxTokens: 1200, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 45000 });
     const rows = Array.isArray(result?.data?.items) ? result.data.items : [];
-    const allowedIds = new Set(items.map(item => item.id));
-    const names = rows.map(row => ({ id: clean(row?.id, 160), name: clean(row?.name, 80) }))
-      .filter(row => allowedIds.has(row.id) && row.name);
+    const aiNames = new Map(rows.map(row => [clean(row?.id, 160), normalizeCompanyName(row?.name)]).filter(([id, name]) => id && name));
+    const names = items.map(item => ({
+      id:item.id,
+      name:normalizeCompanyName(aiNames.get(item.id) || item.current_name)
+    }));
     return Response.json({ names, model: result.model || null }, { headers: { 'Cache-Control':'no-store' } });
   } catch (error) {
-    return Response.json({ error: safeError(error?.message || '회사명 검증 실패') }, { status: Number(error?.status) || 502, headers: { 'Cache-Control':'no-store' } });
+    return Response.json({
+      names:fallbackNames,
+      model:null,
+      fallback:true,
+      warning:safeError(error?.message || '회사명 검증 실패')
+    }, { headers: { 'Cache-Control':'no-store' } });
   }
 }
 
