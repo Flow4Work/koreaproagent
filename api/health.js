@@ -1,4 +1,5 @@
-import { contactDiscoveryConfigured, contactProviderStatus } from '../lib/contact-discovery.js';
+import { contactProviderStatus } from '../lib/contact-discovery-v2.js';
+import { contactDiscoveryConfigured } from '../lib/contact-discovery.js';
 import { AI_MODEL, AI_PROVIDER, aiConfigured, groqConfigured, checkAiConnection, runInferenceSmoke } from '../lib/ai-provider.js';
 
 function safeMessage(text = '') {
