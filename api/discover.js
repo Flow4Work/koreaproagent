@@ -7,7 +7,8 @@ const DISCOVERY_EXCLUDES = [
 ];
 const COMPANY_URL_BLOCKLIST = [
   ...DISCOVERY_EXCLUDES,'linkedin.com','techcrunch.com','reuters.com','prnewswire.com','businesswire.com',
-  'forbes.com','bloomberg.com','yahoo.com'
+  'forbes.com','bloomberg.com','yahoo.com','news.google.com','wsj.com','ft.com','cnn.com','bbc.com',
+  'cnbc.com','coindesk.com','cointelegraph.com','decrypt.co','blockworks.co','theblock.co'
 ];
 const MATURE_COMPANIES = [
   'microsoft','google','amazon','aws','oracle','salesforce','adobe','sap','servicenow','workday','shopify',
@@ -35,6 +36,9 @@ const ASIA_SIGNAL = /(apac|asia|japan|singapore|australia|hong kong|taiwan|south
 const GTM_SIGNAL = /(sales|partnership|partner|channel|hiring|hire|launch|go-to-market|gtm|expansion|expand|international)/i;
 const FUNDING_SIGNAL = /(series\s+[abc]|seed|funding|raised|raises|investment|venture|round)/i;
 const SOFTWARE_SIGNAL = /(saas|software|platform|workflow|automation|analytics|crm|api|developer|cybersecurity|fintech|martech|hrtech|cloud|b2b|enterprise)/i;
+const MEDIA_NAME_SIGNAL = /(?:^|[\s&._-])(news|media|press|journal|daily|times|magazine|newspaper|broadcast(?:ing)?|radio|publisher|publication|newsroom|wire)(?=$|[\s&._-])/i;
+const MEDIA_KO_SIGNAL = /(언론사?|신문사?|뉴스|일보|방송사?|미디어|매거진|저널|통신사|기자)/i;
+const MEDIA_SITE_SIGNAL = /(news publisher|media company|newspaper|magazine publisher|journalism|broadcast network|newsroom|daily news|online publication|press agency|wire service)/i;
 
 function clean(value, max = 1400) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function hasHangul(v = '') { return /[\u3131-\u318E\uAC00-\uD7A3]/.test(String(v || '')); }
@@ -48,6 +52,18 @@ function matureCompany(company = '') { const value = token(company); return MATU
 function excludedCompany(company = '', excludes = []) { const value = token(company); return Boolean(value) && excludes.some(name => { const other = token(name); return other && (value === other || value.startsWith(other) || other.startsWith(value)); }); }
 function blockedCompanyUrl(url) { const host = rootHost(url); return !host || COMPANY_URL_BLOCKLIST.some(domain => host === domain || host.endsWith(`.${domain}`)); }
 function looksLikeCompanyHost(url, company) { if (!url || blockedCompanyUrl(url)) return false; const host = token(rootHost(url).split('.')[0]), name = token(company); return host.length >= 2 && name.length >= 2 && (name.includes(host) || host.includes(name.slice(0, Math.min(name.length, 10)))); }
+function mediaPublisher(company = '', officialUrl = '', rows = []) {
+  const name = clean(company, 180);
+  const hostLabel = rootHost(officialUrl).split('.')[0].replace(/[-_]+/g, ' ');
+  if (MEDIA_NAME_SIGNAL.test(name) || MEDIA_KO_SIGNAL.test(name) || MEDIA_NAME_SIGNAL.test(hostLabel) || MEDIA_KO_SIGNAL.test(hostLabel)) return true;
+  const officialHost = rootHost(officialUrl);
+  if (!officialHost) return false;
+  const officialText = rows
+    .filter(row => rootHost(row?.url) === officialHost)
+    .map(row => `${row?.title || ''} ${row?.content || ''}`)
+    .join(' ');
+  return MEDIA_SITE_SIGNAL.test(officialText) || MEDIA_KO_SIGNAL.test(officialText);
+}
 function explicitKoreaPresence(text = '') {
   const value = String(text).toLowerCase();
   return [
@@ -102,7 +118,8 @@ Required:
 - B2B SaaS / enterprise software / API / work platform.
 - A direct APAC/Asia/Japan/Singapore/Australia expansion or GTM trigger within the last 12 months.
 - Exclude companies with a clearly mature Korea sales organization.
-- Exclude consumer apps, media, games, hardware, consulting and recruiting agencies.
+- Exclude consumer apps, games, hardware, consulting and recruiting agencies.
+- Exclude every news publisher, newspaper, magazine, broadcaster, newsroom, press agency, media outlet and journalism company, even when its site mentions software, AI, data or Web3.
 - Exclude recent companies: ${excluded}
 - User focus: ${clean(focus, 400) || 'none'}
 
@@ -126,7 +143,7 @@ ${evidence}`;
 
 async function verifyCandidate(candidate, discoverySources, excludeCompanies) {
   const company = clean(candidate?.company, 120);
-  if (!company || matureCompany(company) || excludedCompany(company, excludeCompanies)) return null;
+  if (!company || matureCompany(company) || excludedCompany(company, excludeCompanies) || mediaPublisher(company, candidate?.official_url_hint)) return null;
   const evidence = companyEvidence(company, discoverySources);
   if (!evidence.length) return null;
   const evidenceText = evidence.map(row => `${row.title || ''} ${row.content || ''}`).join(' ');
@@ -137,9 +154,9 @@ async function verifyCandidate(candidate, discoverySources, excludeCompanies) {
   });
   const rows = verify.results || [];
   const official = looksLikeCompanyHost(candidate?.official_url_hint, company)
-    ? `https://${rootHost(candidate.official_url_hint)}/`
+    ? `https://${rootHost(candidate?.official_url_hint)}/`
     : (() => { const hit = rows.find(row => looksLikeCompanyHost(row.url, company)); return hit ? `https://${rootHost(hit.url)}/` : ''; })();
-  if (!official) return null;
+  if (!official || mediaPublisher(company, official, rows)) return null;
 
   const combined = [...evidence, ...rows.slice(0, 4)];
   const text = combined.map(row => `${row?.title || ''} ${row?.content || ''}`).join(' ');
@@ -184,6 +201,7 @@ export async function POST(request) {
     const short = await shortlist(discovery.evidence, focus, excludeCompanies);
     const candidates = short.candidates
       .filter(candidate => !excludedCompany(candidate?.company, excludeCompanies))
+      .filter(candidate => !mediaPublisher(candidate?.company, candidate?.official_url_hint))
       .filter(candidate => companyEvidence(clean(candidate?.company, 120), discovery.sources).length)
       .slice(0, 6);
     const checked = await mapConcurrent(candidates, 3, candidate => verifyCandidate(candidate, discovery.sources, excludeCompanies));
