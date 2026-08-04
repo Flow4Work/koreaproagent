@@ -76,3 +76,16 @@ test('search combines zero-cost sources and applies exclusions', async () => {
   assert.equal(result.results.some(row => row.url === 'https://acme.example/'), true);
   assert.equal(result.results.some(row => row.url.includes('news.example')), false);
 });
+
+test('returns ten unique candidates without paid search credits', async () => {
+  const links = Array.from({ length:12 }, (_, index) => `<a class="result__a" href="https://startup${index}.example/">Startup ${index} APAC expansion</a><a class="result__snippet">B2B SaaS hiring partnerships in Japan</a>`).join('');
+  const fetchImpl = async url => ({
+    ok:true,
+    status:200,
+    text:async () => String(url).includes('duckduckgo') ? links : '<rss><channel></channel></rss>'
+  });
+  const result = await publicWebSearch('B2B SaaS APAC expansion unique-ten', { maxResults:10 }, { fetchImpl, timeoutMs:500 });
+  assert.equal(result.results.length, 10);
+  assert.equal(new Set(result.results.map(row => row.url)).size, 10);
+  assert.equal(result.usage.credits, 0);
+});
