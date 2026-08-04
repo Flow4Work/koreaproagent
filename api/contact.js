@@ -1,4 +1,7 @@
+import { POST as baseHunt } from './hunt.js';
 import { findContacts } from '../lib/contact-discovery-v2.js';
+import { attendanceGrade, mergeEvidence } from '../lib/hunt-qualification.js';
+import { listSentCompanyDomains, normalizeCompanyKey } from '../lib/sent-companies.js';
 import { aiConfigured, chatJson } from '../lib/ai-provider.js';
 
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -67,6 +70,100 @@ ${JSON.stringify(items)}`;
   }
 }
 
+let sentDomainCache = { expiresAt: 0, domains: [] };
+
+async function safeSentDomains() {
+  if (sentDomainCache.expiresAt > Date.now()) return sentDomainCache.domains;
+  const secret = clean(process.env.GMAIL_SESSION_SECRET, 5000);
+  if (!secret) return [];
+  try {
+    const domains = await listSentCompanyDomains(secret, 250);
+    sentDomainCache = { expiresAt: Date.now() + 5 * 60 * 1000, domains };
+    return domains;
+  } catch (error) {
+    console.error('hunt sent-domain prefilter failed', clean(error?.message || error, 300));
+    return [];
+  }
+}
+
+function normalizedExcludes(values = []) {
+  return [...new Set(values.map(value => normalizeCompanyKey(value)).filter(Boolean))].slice(-500);
+}
+
+async function qualifiedHunt(request, body = {}) {
+  const sentDomains = await safeSentDomains();
+  const excludes = normalizedExcludes([
+    ...(Array.isArray(body.excludeDomains) ? body.excludeDomains : []),
+    ...sentDomains
+  ]);
+  const bodyJinaKey = clean(body?.tools?.jinaKey, 5000);
+  const envJinaKey = clean(process.env.JINA_API_KEY, 5000);
+  const forwardedBody = {
+    ...body,
+    excludeDomains: excludes,
+    tools: {
+      ...(body.tools || {}),
+      jinaKey: bodyJinaKey || envJinaKey
+    }
+  };
+  delete forwardedBody.action;
+
+  const forwarded = new Request(request.url.replace(/\/api\/contact(?:\?.*)?$/, '/api/hunt'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(forwardedBody)
+  });
+  const response = await baseHunt(forwarded);
+  const text = await response.text();
+  let data = {};
+  try { data = text ? JSON.parse(text) : {}; }
+  catch { return new Response(text, { status: response.status, headers: response.headers }); }
+  if (!response.ok) return Response.json(data, { status: response.status, headers: { 'Cache-Control': 'no-store' } });
+
+  const merged = mergeEvidence(Array.isArray(data.leads) ? data.leads : []);
+  const graded = merged.map(lead => {
+    const grade = lead.campaign === 'kbw'
+      ? attendanceGrade(lead)
+      : { code: '', label: '', contactEligible: true, reason: '' };
+    return {
+      ...lead,
+      attendance_grade: grade.code,
+      attendance_grade_label: grade.label,
+      attendance_reason: grade.reason,
+      contact_eligible: grade.contactEligible,
+      quality_reasons: [...new Set([
+        ...(lead.quality_reasons || []),
+        grade.code ? `${grade.code}등급 · ${grade.reason}` : ''
+      ].filter(Boolean))]
+    };
+  });
+  const gradeScore = grade => grade === 'A' ? 2 : grade === 'B' ? 1 : 0;
+  const leads = graded
+    .filter(lead => lead.campaign !== 'kbw' || lead.contact_eligible)
+    .sort((a, b) => gradeScore(b.attendance_grade) - gradeScore(a.attendance_grade)
+      || Number(b.sales_priority || b.score || 0) - Number(a.sales_priority || a.score || 0))
+    .slice(0, 12);
+  const counts = graded.reduce((acc, lead) => {
+    if (lead.attendance_grade) acc[lead.attendance_grade] = (acc[lead.attendance_grade] || 0) + 1;
+    return acc;
+  }, {});
+
+  return Response.json({
+    ...data,
+    leads,
+    meta: {
+      ...(data.meta || {}),
+      returned: leads.length,
+      sent_preexcluded: sentDomains.length,
+      jina_env_used: Boolean(!bodyJinaKey && envJinaKey),
+      attendance_gate: body.campaign === 'kbw' ? 'A+B only' : 'not_applied',
+      attendance_grade_counts: counts,
+      contact_search_grades: body.campaign === 'kbw' ? ['A', 'B'] : ['all'],
+      evidence_merge: true
+    }
+  }, { headers: { 'Cache-Control': 'no-store' } });
+}
+
 function failureReason(result = {}) {
   const attempts = Array.isArray(result.attempts) ? result.attempts : [];
   if (attempts.some(attempt => attempt.reason === 'generic_only')) return '지원·대표메일만 발견';
@@ -84,6 +181,7 @@ export async function POST(request) {
   catch { return Response.json({ error: '요청 형식이 잘못됐습니다.' }, { status: 400 }); }
 
   if (body.action === 'company_names') return cleanCompanyNames(body);
+  if (body.action === 'hunt_v2') return qualifiedHunt(request, body);
 
   const url = clean(body.url, 500);
   const recommendedRole = clean(body.recommendedRole, 120) || 'Operations Lead';
