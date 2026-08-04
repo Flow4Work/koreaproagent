@@ -51,13 +51,14 @@
       verified_override: true,
       trustedCrossDomain: row.trusted_cross_domain === true,
       lookupDomain: rootDomain(row.lookup_domain),
+      priority: Number(row.priority) || 100,
       verifiedAt: clean(row.verified_at, 80),
       sourceLabel: clean(row.source_label, 240)
     };
   }
 
   async function loadRows() {
-    const select = 'lookup_domain,email,contact_name,title,email_status,source_url,source_label,trusted_cross_domain,verified_at';
+    const select = 'lookup_domain,email,contact_name,title,email_status,source_url,source_label,trusted_cross_domain,priority,verified_at';
     const response = await originalFetch(`${SUPABASE_URL}/rest/v1/${TABLE}?select=${encodeURIComponent(select)}&active=eq.true`, {
       headers: {
         apikey: SUPABASE_KEY,
@@ -82,6 +83,7 @@
     const rows = await rowsPromise;
     return rows
       .filter(row => rootDomain(row.lookup_domain) === domain)
+      .sort((a, b) => Number(a.priority || 100) - Number(b.priority || 100) || clean(a.email, 240).localeCompare(clean(b.email, 240)))
       .map(shapeContact)
       .filter(contact => contact.email)
       .slice(0, 4);
