@@ -64,9 +64,9 @@
       // One-time migration: remove stale leads/messages,
       // but never remove user-entered API keys or rejected-domain feedback.
       const migrationKey = 'kpa.hunt.messageSchema';
-      if (localStorage.getItem(migrationKey) !== 'v7') {
+      if (localStorage.getItem(migrationKey) !== 'v8') {
         ['kpa.hunt.leads','kpa.hunt.selected','kpa.hunt.cycle','kpa.hunt.firstRun','kpa.hunt.stopped'].forEach(key => localStorage.removeItem(key));
-        localStorage.setItem(migrationKey, 'v7');
+        localStorage.setItem(migrationKey, 'v8');
       }
 
       const restoreAndAutosave = () => {
