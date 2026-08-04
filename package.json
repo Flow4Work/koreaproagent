@@ -5,6 +5,7 @@
   "description": "Korea GTM client discovery and prospect delivery MVP.",
   "scripts": {
     "dev": "vercel dev",
+    "test": "node --test",
     "deploy": "vercel",
     "deploy:prod": "vercel --prod"
   },
