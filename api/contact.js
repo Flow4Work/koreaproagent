@@ -1,4 +1,4 @@
-import { findContacts, normalizeContacts } from '../lib/contact-discovery.js';
+import { findContacts } from '../lib/contact-discovery-v2.js';
 import { aiConfigured, chatJson } from '../lib/ai-provider.js';
 
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
@@ -67,6 +67,17 @@ ${JSON.stringify(items)}`;
   }
 }
 
+function failureReason(result = {}) {
+  const attempts = Array.isArray(result.attempts) ? result.attempts : [];
+  if (attempts.some(attempt => attempt.reason === 'generic_only')) return '지원·대표메일만 발견';
+  if (attempts.some(attempt => attempt.reason === 'invalid_only')) return '검증 실패 이메일만 발견';
+  if (attempts.some(attempt => attempt.reason === 'below_quality_threshold')) return '직무 또는 품질 점수 미달';
+  if (attempts.every(attempt => attempt.status === 'skipped')) return '메일 공급자 미연결';
+  if (attempts.some(attempt => attempt.status === 'error' && attempt.code === 429)) return '메일 공급자 사용량 한도 초과';
+  if (attempts.some(attempt => attempt.status === 'error')) return '일부 메일 공급자 오류';
+  return result.stopReason === 'all_providers_exhausted_no_results' ? '공개·공급자 이메일 없음' : '적합한 담당자 이메일 미확보';
+}
+
 export async function POST(request) {
   let body = {};
   try { body = await request.json(); }
@@ -77,37 +88,32 @@ export async function POST(request) {
   const url = clean(body.url, 500);
   const recommendedRole = clean(body.recommendedRole, 120) || 'Operations Lead';
   const roleTargets = Array.isArray(body.roleTargets) ? body.roleTargets.map(role => clean(role, 120)).filter(Boolean) : [];
-  const fallbackRoles = ['Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Founder','CEO'];
-  const roles = [...new Set([recommendedRole, ...roleTargets, ...fallbackRoles])].slice(0, 5);
+  const fallbackRoles = ['Events Lead','Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Founder','CEO'];
+  const roles = [...new Set([recommendedRole, ...roleTargets, ...fallbackRoles])].slice(0, 10);
   if (!url) return Response.json({ error: '회사 URL이 필요합니다.' }, { status: 400 });
 
   try {
-    const contacts = [];
-    const seen = new Set();
-    const providers = [];
-    const attempts = [];
-
-    for (const role of roles) {
-      if (contacts.length >= 4) break;
-      const result = await findContacts(url, { maxContacts: 8, minContacts: 4, recommendedRole: role });
-      if (result?.provider) providers.push(...String(result.provider).split('+').filter(Boolean));
-      for (const attempt of result?.attempts || []) attempts.push({ ...attempt, role });
-      for (const contact of normalizeContacts(result?.emails || [], role)) {
-        const key = clean(contact.email || contact.linkedinUrl || contact.name, 220).toLowerCase();
-        if (!key || seen.has(key)) continue;
-        seen.add(key);
-        contacts.push(contact);
-        if (contacts.length >= 4) break;
-      }
-    }
-
-    contacts.sort((a, b) => Number(b.score || 0) - Number(a.score || 0));
+    const result = await findContacts(url, {
+      maxContacts: 8,
+      minQualified: 1,
+      recommendedRole,
+      roleTargets: roles
+    });
+    const contacts = Array.isArray(result?.emails) ? result.emails.slice(0, 4) : [];
+    const primary = contacts.find(contact => contact.qualified) || null;
     return Response.json({
-      contact: contacts[0] || null,
-      contacts: contacts.slice(0, 4),
-      provider: [...new Set(providers)].join('+') || null,
-      attempts,
-      target_contacts: 4
+      contact: primary,
+      contacts,
+      provider: result.provider || null,
+      provider_status: result.providerStatus || {},
+      attempts: result.attempts || [],
+      qualified_count: Number(result.qualifiedCount) || 0,
+      score_threshold: Number(result.scoreThreshold) || 75,
+      contact_status: primary ? 'qualified' : 'failed',
+      failure_reason: primary ? null : failureReason(result),
+      stop_reason: result.stopReason || null,
+      cache_hit: Boolean(result.cacheHit),
+      target_contacts: 1
     }, { headers: { 'Cache-Control':'no-store' } });
   } catch (error) {
     return Response.json({ error: safeError(error?.message || error) }, { status: 502 });
