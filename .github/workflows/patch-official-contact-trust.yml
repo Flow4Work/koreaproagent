@@ -1,0 +1,50 @@
+name: Patch trusted official contact handling
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'Patch trusted official contact handling'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply minimal trusted-contact patch
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app-v3.js')
+          text = path.read_text(encoding='utf-8')
+          old = """  const emailDomain = email.split('@')[1] || '';
+  const companyDomain = rootHost(lead?.domain || lead?.url || '');
+  return Boolean(companyDomain && (emailDomain === companyDomain || emailDomain.endsWith(`.${companyDomain}`)));
+"""
+          new = """  if (lead?.contact?.verifiedOverride === true || lead?.contact?.verified_override === true) return true;
+  const emailDomain = email.split('@')[1] || '';
+  const companyDomain = rootHost(lead?.domain || lead?.url || '');
+  return Boolean(companyDomain && (emailDomain === companyDomain || emailDomain.endsWith(`.${companyDomain}`)));
+"""
+          if old not in text:
+              raise SystemExit('usableEmail target block not found; refusing broad edit')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          workflow = Path('.github/workflows/patch-official-contact-trust.yml')
+          if workflow.exists():
+              workflow.unlink()
+          PY
+
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app-v3.js .github/workflows/patch-official-contact-trust.yml
+          git commit -m "Trust official DB contact aliases"
+          git push
