@@ -3,7 +3,7 @@
   const SUPABASE_KEY = 'sb_publishable_KRwgoo9SP-fCrYxLHYQ2hg_jtxx0lmR';
   const TABLE = 'kpa_contact_overrides';
   const LEADS_KEY = 'kpa.hunt.leads';
-  const RELOAD_KEY = 'kpa.contact-overrides.reloaded.v1';
+  const RELOAD_KEY = 'kpa.contact-overrides.signature.v2';
   const originalFetch = window.fetch.bind(window);
 
   function clean(value = '', max = 500) {
@@ -50,6 +50,7 @@
       verifiedOverride: true,
       verified_override: true,
       trustedCrossDomain: row.trusted_cross_domain === true,
+      lookupDomain: rootDomain(row.lookup_domain),
       verifiedAt: clean(row.verified_at, 80),
       sourceLabel: clean(row.source_label, 240)
     };
@@ -120,6 +121,14 @@
     return originalFetch(input, init);
   };
 
+  function overrideSignature(leads = []) {
+    return leads
+      .filter(lead => lead?.contact?.verifiedOverride === true)
+      .map(lead => `${clean(lead.id, 220)}:${rootDomain(lead.domain || '')}:${clean(lead.contact?.email, 240).toLowerCase()}`)
+      .sort()
+      .join('|');
+  }
+
   async function hydrateStoredLeads() {
     let leads = [];
     try { leads = JSON.parse(localStorage.getItem(LEADS_KEY) || '[]'); } catch { return; }
@@ -127,12 +136,24 @@
 
     let changed = false;
     for (const lead of leads) {
-      const contacts = await contactsFor(lead?.domain || lead?.url || '');
+      const lookupValue = lead?.original_domain || lead?.url || lead?.domain || '';
+      const contacts = await contactsFor(lookupValue);
       if (!contacts.length) continue;
+
+      const primary = contacts[0];
       const currentEmail = clean(lead?.contact?.email, 240).toLowerCase();
-      const nextEmail = contacts[0].email;
-      if (currentEmail === nextEmail && lead?.contact?.verifiedOverride === true) continue;
-      lead.contact = contacts[0];
+      const emailDomain = rootDomain(primary.email.split('@')[1] || '');
+      const currentDomain = rootDomain(lead?.domain || '');
+      const lookupDomain = rootDomain(lookupValue);
+      const normalizeToOrganizer = primary.trustedCrossDomain && emailDomain && emailDomain !== currentDomain;
+      const alreadyHydrated = currentEmail === primary.email
+        && lead?.contact?.verifiedOverride === true
+        && (!normalizeToOrganizer || currentDomain === emailDomain);
+      if (alreadyHydrated) continue;
+
+      if (primary.trustedCrossDomain && lookupDomain && !lead.original_domain) lead.original_domain = lookupDomain;
+      if (normalizeToOrganizer) lead.domain = emailDomain;
+      lead.contact = primary;
       lead.contacts = contacts;
       lead.contact_provider = 'manual_db+official_web';
       lead.contact_status = 'found';
@@ -141,11 +162,13 @@
 
     if (!changed) return;
     localStorage.setItem(LEADS_KEY, JSON.stringify(leads));
-    if (sessionStorage.getItem(RELOAD_KEY) !== '1') {
-      sessionStorage.setItem(RELOAD_KEY, '1');
+    const signature = overrideSignature(leads);
+    if (signature && sessionStorage.getItem(RELOAD_KEY) !== signature) {
+      sessionStorage.setItem(RELOAD_KEY, signature);
       location.reload();
     }
   }
 
   hydrateStoredLeads().catch(() => {});
+  setInterval(() => hydrateStoredLeads().catch(() => {}), 3000);
 })();
