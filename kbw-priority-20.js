@@ -14,7 +14,7 @@
     ['Money20/20','money2020.com','press@money2020.com','https://us.money2020.com/media/newsroom/2022-10-18-us22-do-better','KBW2026 official speaker: Ian Fong, Vice President, Content Asia',97],
     ['Turnkey','turnkey.com','hello@turnkey.com','https://www.turnkey.com/legal/terms','KBW2026 official speaker: Michael Lewellen, Head of Solutions Engineering',97],
     ['Backpack','backpack.exchange','support@backpack.exchange','https://support.backpack.exchange/technical-docs/onboarding','KBW2026 official speaker: Armani Ferrante, Co-Founder & CEO',97],
-    ['Plasma','plasma.to','support@plasma.to','https://www.plasma.org/privacy-policy','KBW2026 official speaker: Zaheer Ebtikar, CSO',96],
+    ['Plasma','plasma.org','support@plasma.org','https://www.plasma.org/privacy-policy','KBW2026 official speaker: Zaheer Ebtikar, CSO',96],
     ['Solana Foundation','solana.com','hello@solana.com','https://solana.com/community','Current Seoul/Korea ecosystem signal and official public contact',95],
     ['Coinbase','coinbase.com','press@coinbase.com','https://www.coinbase.com/press','Global crypto team with active ecosystem/event partnerships; official public contact',95],
     ['Kraken','kraken.com','marketing@kraken.com','https://support.kraken.com/articles/4410362151828-business-inquiries','Official marketing/sponsorship contact; strong KBW-week outreach fit',95],
