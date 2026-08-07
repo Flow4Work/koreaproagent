@@ -6,7 +6,7 @@
   const rows = [
     ['OKX','okx.com','media@okx.com','https://www.okx.com/learn/okx-announces-zero-knowledge-proof-solvency-verification','KBW2026 official speaker: Star Xu, CEO & Founder',100],
     ['Robinhood','robinhood.com','press@robinhood.com','https://investors.robinhood.com/news-releases/news-release-details/robinhood-announces-private-offering-20-billion-convertible','KBW2026 official speaker: Johann Kerbrat, SVP & GM of Crypto',100],
-    ['MoonPay','moonpay.com','press@moonpay.com','https://www.globenewswire.com/news-release/2026/06/09/3308770/0/en/house-of-doge-and-moonpay-enable-dogecoin-payments-across-6-000-merchants-and-launch-%C3%90oge-pay.html','KBW2026 official speaker: Caroline Pham, Chief Legal Officer & Chief Administrative Officer',99],
+    ['MoonPay','moonpay.com','media@moonpay.com','https://www.moonpay.com/newsroom/moonpay-app','KBW2026 official speaker: Caroline Pham, Chief Legal Officer & Chief Administrative Officer',99],
     ['Ripple','ripple.com','press@ripple.com','https://ripple.com/ripple-press/ripple-receives-full-eu-mica-casp-license/','KBW2026 official speaker: Monica Long, President',99],
     ['Tether','tether.to','press@tether.to','https://www.globenewswire.com/news-release/2026/02/18/3240269/0/en/rumble-and-tether-add-usa-to-rumble-wallet.html','KBW2026 official speaker: Bo Hines, CEO of Tether USA₮',99],
     ['World Liberty Financial','worldlibertyfinancial.com','info@worldlibertyfinancial.com','https://worldlibertyfinancial.com/','KBW2026 official speaker: Zach Witkoff, CEO',98],
