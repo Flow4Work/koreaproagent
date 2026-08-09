@@ -4,8 +4,14 @@ import { attendanceGrade, mergeEvidence } from '../lib/hunt-qualification.js';
 import { listSentCompanyDomains, normalizeCompanyKey } from '../lib/sent-companies.js';
 import { aiConfigured, chatJson } from '../lib/ai-provider.js';
 
-function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
-function safeError(value = '') { return String(value).replace(/[A-Za-z0-9_-]{32,}/g, '[key]').slice(0, 500); }
+function clean(value, max = 500) {
+  return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim().slice(0, max) : '';
+}
+
+function safeError(value = '') {
+  return String(value).replace(/[A-Za-z0-9_-]{32,}/g, '[key]').slice(0, 500);
+}
+
 function normalizeCompanyName(value = '') {
   const original = clean(value, 160);
   const normalized = original
@@ -24,7 +30,6 @@ async function cleanCompanyNames(body = {}) {
   })).filter(item => item.id && item.current_name);
 
   if (!items.length) return Response.json({ names: [] }, { headers: { 'Cache-Control':'no-store' } });
-
   const fallbackNames = items.map(item => ({ id:item.id, name:item.current_name }));
   if (!aiConfigured()) {
     return Response.json({ names:fallbackNames, model:null, fallback:true }, { headers: { 'Cache-Control':'no-store' } });
@@ -55,10 +60,7 @@ ${JSON.stringify(items)}`;
     const result = await chatJson({ prompt, maxTokens: 1200, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 45000 });
     const rows = Array.isArray(result?.data?.items) ? result.data.items : [];
     const aiNames = new Map(rows.map(row => [clean(row?.id, 160), normalizeCompanyName(row?.name)]).filter(([id, name]) => id && name));
-    const names = items.map(item => ({
-      id:item.id,
-      name:normalizeCompanyName(aiNames.get(item.id) || item.current_name)
-    }));
+    const names = items.map(item => ({ id:item.id, name:normalizeCompanyName(aiNames.get(item.id) || item.current_name) }));
     return Response.json({ names, model: result.model || null }, { headers: { 'Cache-Control':'no-store' } });
   } catch (error) {
     return Response.json({
@@ -164,15 +166,144 @@ async function qualifiedHunt(request, body = {}) {
   }, { headers: { 'Cache-Control': 'no-store' } });
 }
 
-function failureReason(result = {}) {
+function uniqueContacts(body = {}) {
+  const rows = [
+    body.contact,
+    ...(Array.isArray(body.existingContacts) ? body.existingContacts : []),
+    ...(Array.isArray(body.contacts) ? body.contacts : [])
+  ].filter(Boolean);
+  const seen = new Set();
+  return rows.filter(contact => {
+    const key = clean(contact?.email || contact?.linkedinUrl || contact?.name, 240).toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 30);
+}
+
+function targetRoles(body = {}) {
+  const recommendedRole = clean(body.recommendedRole, 120) || 'Operations Lead';
+  const requested = Array.isArray(body.roleTargets) ? body.roleTargets.map(role => clean(role, 120)).filter(Boolean) : [];
+  const fallback = [
+    'Events Lead','Event Marketing','Field Marketing','Experiential Marketing','Brand Activation','Sponsorships',
+    'Operations Lead','Partnerships Lead','Strategic Partnerships','Community Lead','Ecosystem Lead','Head of Marketing',
+    'Country Manager','APAC Lead','Business Development','Founder','CEO'
+  ];
+  return {
+    recommendedRole,
+    roles: [...new Set([recommendedRole, ...requested, ...fallback])].slice(0, 20)
+  };
+}
+
+function failureType(result = {}) {
+  const summary = result.verificationSummary || {};
   const attempts = Array.isArray(result.attempts) ? result.attempts : [];
-  if (attempts.some(attempt => attempt.reason === 'generic_only')) return '지원·대표메일만 발견';
-  if (attempts.some(attempt => attempt.reason === 'invalid_only')) return '검증 실패 이메일만 발견';
-  if (attempts.some(attempt => attempt.reason === 'below_quality_threshold')) return '직무 또는 품질 점수 미달';
+  const qualityReason = attempts.find(attempt => attempt.provider === 'quality_gate')?.reason;
+  if (result.stopReason === 'invalid_domain') return 'invalid_domain';
+  if (qualityReason === 'generic_only' || Number(summary.generic) > 0 && !Number(summary.personal) && !Number(summary.role_mailbox)) return 'generic_only';
+  if (Number(summary.accept_all) > 0) return 'accept_all';
+  if (Number(summary.unknown) > 0) return 'unknown';
+  if (qualityReason === 'below_quality_threshold') return 'role_or_quality';
+  if (!Number(summary.valid) && !Number(summary.accept_all) && !Number(summary.unknown)) return 'no_email';
+  return 'not_qualified';
+}
+
+function failureReason(result = {}) {
+  const type = failureType(result);
+  const attempts = Array.isArray(result.attempts) ? result.attempts : [];
+  if (type === 'generic_only') return '지원·대표메일만 발견';
+  if (type === 'accept_all') return '수신 여부를 확정할 수 없는 accept-all 메일';
+  if (type === 'unknown') return 'SMTP 검증 결과가 불확실한 이메일';
+  if (type === 'role_or_quality') return '직무 또는 품질 점수 미달';
+  if (type === 'invalid_domain') return '회사 도메인 확인 실패';
   if (attempts.every(attempt => attempt.status === 'skipped')) return '메일 공급자 미연결';
   if (attempts.some(attempt => attempt.status === 'error' && attempt.code === 429)) return '메일 공급자 사용량 한도 초과';
   if (attempts.some(attempt => attempt.status === 'error')) return '일부 메일 공급자 오류';
   return result.stopReason === 'all_providers_exhausted_no_results' ? '공개·공급자 이메일 없음' : '적합한 담당자 이메일 미확보';
+}
+
+async function buildContactResult(body = {}) {
+  const url = clean(body.url, 500);
+  if (!url) throw Object.assign(new Error('회사 URL이 필요합니다.'), { status: 400 });
+  const { recommendedRole, roles } = targetRoles(body);
+  const seedContacts = uniqueContacts(body);
+  const forceVerify = body.forceVerify === true;
+  const result = await findContacts(url, {
+    maxContacts: 12,
+    minQualified: 1,
+    recommendedRole,
+    roleTargets: roles,
+    seedContacts,
+    verifyLimit: Math.min(Math.max(Number(body.verifyLimit) || (forceVerify ? 12 : 8), 1), 20),
+    stopAfterQualified: body.stopAfterQualified !== false,
+    forceRefresh: forceVerify
+  });
+  const contacts = Array.isArray(result?.emails) ? result.emails.slice(0, 6) : [];
+  const primary = contacts.find(contact => contact.qualified) || null;
+  return {
+    contact: primary,
+    contacts,
+    provider: result.provider || null,
+    provider_status: result.providerStatus || {},
+    attempts: result.attempts || [],
+    qualified_count: Number(result.qualifiedCount) || 0,
+    score_threshold: Number(result.scoreThreshold) || 75,
+    contact_status: primary ? 'qualified' : 'failed',
+    failure_type: primary ? null : failureType(result),
+    failure_reason: primary ? null : failureReason(result),
+    stop_reason: result.stopReason || null,
+    cache_hit: Boolean(result.cacheHit),
+    target_contacts: 1,
+    verification_summary: result.verificationSummary || {},
+    role_targets: result.roleTargets || roles
+  };
+}
+
+async function mapLimit(items, limit, worker) {
+  const output = new Array(items.length);
+  let cursor = 0;
+  async function run() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try {
+        output[index] = { status: 'fulfilled', value: await worker(items[index], index) };
+      } catch (error) {
+        output[index] = { status: 'rejected', reason: error };
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => run()));
+  return output;
+}
+
+async function reverifyBatch(body = {}) {
+  const items = (Array.isArray(body.items) ? body.items : []).slice(0, 4);
+  if (!items.length) return Response.json({ results: [], processed: 0 }, { headers: { 'Cache-Control':'no-store' } });
+  const settled = await mapLimit(items, 2, async item => ({
+    id: clean(item?.id, 180),
+    ...(await buildContactResult({
+      ...item,
+      forceVerify: true,
+      verifyLimit: Number(item?.verifyLimit) || 12,
+      stopAfterQualified: true
+    }))
+  }));
+  const results = settled.map((entry, index) => {
+    if (entry.status === 'fulfilled') return entry.value;
+    return {
+      id: clean(items[index]?.id, 180),
+      contact: null,
+      contacts: [],
+      contact_status: 'failed',
+      failure_type: 'request_error',
+      failure_reason: safeError(entry.reason?.message || '재검증 실패')
+    };
+  });
+  return Response.json({
+    results,
+    processed: results.length,
+    qualified: results.filter(result => result.contact?.qualified).length
+  }, { headers: { 'Cache-Control':'no-store' } });
 }
 
 export async function POST(request) {
@@ -182,38 +313,12 @@ export async function POST(request) {
 
   if (body.action === 'company_names') return cleanCompanyNames(body);
   if (body.action === 'hunt_v2') return qualifiedHunt(request, body);
-
-  const url = clean(body.url, 500);
-  const recommendedRole = clean(body.recommendedRole, 120) || 'Operations Lead';
-  const roleTargets = Array.isArray(body.roleTargets) ? body.roleTargets.map(role => clean(role, 120)).filter(Boolean) : [];
-  const fallbackRoles = ['Events Lead','Operations Lead','Partnerships Lead','Community Lead','Head of Marketing','Founder','CEO'];
-  const roles = [...new Set([recommendedRole, ...roleTargets, ...fallbackRoles])].slice(0, 10);
-  if (!url) return Response.json({ error: '회사 URL이 필요합니다.' }, { status: 400 });
+  if (body.action === 'reverify_batch') return reverifyBatch(body);
 
   try {
-    const result = await findContacts(url, {
-      maxContacts: 8,
-      minQualified: 1,
-      recommendedRole,
-      roleTargets: roles
-    });
-    const contacts = Array.isArray(result?.emails) ? result.emails.slice(0, 4) : [];
-    const primary = contacts.find(contact => contact.qualified) || null;
-    return Response.json({
-      contact: primary,
-      contacts,
-      provider: result.provider || null,
-      provider_status: result.providerStatus || {},
-      attempts: result.attempts || [],
-      qualified_count: Number(result.qualifiedCount) || 0,
-      score_threshold: Number(result.scoreThreshold) || 75,
-      contact_status: primary ? 'qualified' : 'failed',
-      failure_reason: primary ? null : failureReason(result),
-      stop_reason: result.stopReason || null,
-      cache_hit: Boolean(result.cacheHit),
-      target_contacts: 1
-    }, { headers: { 'Cache-Control':'no-store' } });
+    return Response.json(await buildContactResult(body), { headers: { 'Cache-Control':'no-store' } });
   } catch (error) {
-    return Response.json({ error: safeError(error?.message || error) }, { status: 502 });
+    const status = Number(error?.status) || 502;
+    return Response.json({ error: safeError(error?.message || error) }, { status });
   }
 }
