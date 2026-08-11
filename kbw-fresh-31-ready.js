@@ -28,9 +28,17 @@
       if (!Array.isArray(lead.role_targets) || !lead.role_targets.length) next.role_targets = ['Events', 'Partnerships', 'Marketing', 'Community'];
       if (lead?.contact?.email && lead.contact_status !== 'found') next.contact_status = 'found';
 
-      // MemeCore publishes its outreach address on the memecore.org domain.
-      // Use that verified email domain for the app's strict same-domain sendability check.
-      if (lead.company === 'MemeCore' && lead.domain !== 'memecore.org') next.domain = 'memecore.org';
+      // MemeCore publicly listed this same-domain contact for its KBW 2025 HALLOMEME event.
+      if (lead.company === 'MemeCore' && lead?.contact?.email !== 'biz@memecore.com') {
+        next.email = 'biz@memecore.com';
+        next.contact = {
+          ...(lead.contact || {}),
+          email: 'biz@memecore.com',
+          title: 'Marketing / Media / Events',
+          source: 'https://www.prnewswire.com/news-releases/memecore-to-host-hallomeme-ride-until-next-morning-at-kbw-2025-302564281.html',
+          sourceUrl: 'https://www.prnewswire.com/news-releases/memecore-to-host-hallomeme-ride-until-next-morning-at-kbw-2025-302564281.html'
+        };
+      }
 
       if (Object.keys(next).length) {
         Object.assign(lead, next);
