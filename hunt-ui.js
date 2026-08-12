@@ -49,7 +49,7 @@
 (() => {
   if (document.querySelector('script[data-bcww-mode]')) return;
   const script = document.createElement('script');
-  script.src = '/bcww-mode.js?v=20260812-bcww-v1';
+  script.src = '/bcww-mode-v2.js?v=20260813-bcww-hybrid-email-v2';
   script.dataset.bcwwMode = '1';
   document.head.appendChild(script);
 })();
