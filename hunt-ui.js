@@ -52,3 +52,21 @@
   script.dataset.bcwwMode = '1';
   document.head.appendChild(script);
 })();
+
+(() => {
+  if (document.querySelector('script[data-international-event-mode]')) return;
+  let attempts = 0;
+  const load = () => {
+    if (document.querySelector('script[data-international-event-mode]')) return;
+    if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww) {
+      const script = document.createElement('script');
+      script.src = '/event-campaigns-mode.js?v=20260812-international-events-v1';
+      script.dataset.internationalEventMode = '1';
+      document.head.appendChild(script);
+      return;
+    }
+    attempts += 1;
+    if (attempts < 120) setTimeout(load, 50);
+  };
+  load();
+})();
