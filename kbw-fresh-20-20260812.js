@@ -1,38 +1,259 @@
 (() => {
-  const BATCH = '20260812-kbw-fresh20-v1';
+  const BATCH = '20260812-kbw-fresh20-v2';
+  const OBSOLETE_BATCH = '20260812-kbw-fresh20-v1';
   const EXPECTED = 20;
   const SENT_ENDPOINT = '/api/gmail?action=sent-domains';
   const SENT_CACHE_KEY = 'kpa.hunt.sentDomains.v1';
   const DELETED_KEY = 'kpa.hunt.deletedDomains.v1';
-  const HARD_BLOCKED = new Set(['sooho.io', 'bitmex.com']);
+  const HARD_BLOCKED = new Set(['sooho.io', 'bitmex.com', 'bitmart.com', 'despread.io']);
   const INVALID_EMAILS = new Set(['info@succinct.xyz', 'security@raydium.io']);
 
   const ROWS = [
-    {"company":"Talus Network","domain":"talus.network","url":"https://talus.network/","email":"hi@talus.network","title":"Team / Partnerships","language":"en","score":100,"kbw_status":"2026 서울 Talus 커뮤니티 행사 · limited merch/현장 경품 운영","signal":"Talus ran a 2026 Seoul community activation with limited merchandise and on-site giveaways, making local merch production directly relevant.","source_url":"https://luma.com/vkcteemp","contact_source":"https://talus.network/"},
-    {"company":"Korea Buidl Week Alliance","domain":"kbwa.events","url":"https://www.buidlkorea.com/","email":"contact@kbwa.events","title":"Alliance / Events","language":"ko","score":100,"kbw_status":"Korea Buidl Week 2026 공식 운영 Alliance","signal":"KBWA runs Korea Buidl Week 2026 in Seoul and explicitly recruits event hosts, sponsors and partners across the week.","source_url":"https://www.buidlkorea.com/about","contact_source":"https://www.buidlkorea.com/contact"},
-    {"company":"ARK Point","domain":"arkpoint.kr","url":"https://arkpoint.kr/","email":"teo@arkpoint.kr","title":"CEO / Partnerships","language":"ko","score":99,"kbw_status":"Korea Buidl Week 2026 Alliance · AI Agentic Finance Forum 공동 주최","signal":"ARK Point is a KBWA alliance member and co-hosted the 2026 AI Agentic Finance Forum in Seoul.","source_url":"https://www.buidlkorea.com/events","contact_source":"https://arkpoint.kr/"},
-    {"company":"Formula Labs","domain":"formulalabs.xyz","url":"https://formulalabs.xyz/","email":"contact@fomulalabs.xyz","title":"Team / Partnerships","language":"ko","score":97,"kbw_status":"Korea Buidl Week 2026 Alliance 멤버","signal":"Formula Labs is listed in the 2026 Korea Buidl Week Alliance, placing it directly inside the Seoul builder-week operating network.","source_url":"https://www.buidlkorea.com/about","contact_source":"https://formulalabs.xyz/","trusted_cross_domain":true},
-    {"company":"Catalyze","domain":"catalyze-research.com","url":"https://catalyze-research.com/","email":"contact@catalyze-research.com","title":"Team / Partnerships","language":"ko","score":100,"kbw_status":"AI/InfraCon 2026 서울 메인 이벤트 호스트 · 현장 giveaways","signal":"Catalyze hosted AI/InfraCon 2026 in Gangnam during BUIDL Week, with food, drinks, networking and attendee giveaways.","source_url":"https://luma.com/8nzr1zec","contact_source":"https://catalyze-research.com/"},
-    {"company":"DeSpread","domain":"despread.io","url":"https://despread.io/","email":"contact@despread.io","title":"Business / Partnerships","language":"ko","score":98,"kbw_status":"Korea Buidl Week 2026 Alliance 멤버","signal":"DeSpread is a named member of the 2026 Korea Buidl Week Alliance and is active in Korea-focused Web3 ecosystem development.","source_url":"https://www.buidlkorea.com/about","contact_source":"https://despread.io/"},
-    {"company":"IoTrust","domain":"iotrust.kr","url":"https://iotrust.kr/","email":"contact@iotrust.kr","title":"Business / Partnerships","language":"ko","score":98,"kbw_status":"Korea Buidl Week 2026 Alliance · D'Cent 운영사","signal":"IoTrust is represented in the 2026 Korea Buidl Week Alliance, and its D'Cent brand also appears in current BUIDL Week partner activity.","source_url":"https://www.buidlkorea.com/about","contact_source":"https://iotrust.kr/"},
-    {"company":"SynFutures","domain":"synfutures.com","url":"https://www.synfutures.com/","email":"info@synfutures.com","title":"Events / Partnerships","language":"en","score":99,"kbw_status":"AI/InfraCon 2026 공식 파트너 · 기존 KBW 서울 행사 직접 공동주최","signal":"SynFutures was a 2026 AI/InfraCon partner in Seoul and has also directly co-hosted a Korea Blockchain Week networking event.","source_url":"https://luma.com/8nzr1zec","contact_source":"https://summit.synfutures.com/"},
-    {"company":"IOTA Foundation","domain":"iota.org","url":"https://www.iota.org/","email":"partnerships@iota.org","title":"Partnerships","language":"en","score":98,"kbw_status":"AI/InfraCon 2026 서울 공식 파트너","signal":"IOTA was listed as an official partner of AI/InfraCon 2026 during BUIDL Week in Seoul.","source_url":"https://luma.com/8nzr1zec","contact_source":"https://www.iota.org/build/get-started"},
-    {"company":"BNB Chain","domain":"bnbchain.org","url":"https://www.bnbchain.org/","email":"info@bnbchain.org","title":"Ecosystem / Partnerships","language":"en","score":100,"kbw_status":"BuidlHack 2026 $5K 공식 스폰서 트랙 · 서울 Builder Day/Final","signal":"BNB Chain sponsored a dedicated $5,000 track in BuidlHack 2026 and ran a workshop tied to the Korea Buidl Week builder pipeline.","source_url":"https://www.buidlkorea.com/buidlhack2026","contact_source":"https://www.bnbchain.org/en/blog/mvb-accelerator-program-teams-up-with-cmc-labs-to-launch-new-founder-track-aiming-to-incubate-100-new-projects-on-bnb-chain"},
-    {"company":"ZetaChain","domain":"zetachain.com","url":"https://www.zetachain.com/","email":"partnerships@zetachain.com","title":"Partnerships","language":"en","score":99,"kbw_status":"2026 Agent Execution Frontier Seoul 공식 스폰서 · 전용 연구 트랙","signal":"ZetaChain sponsored Agent Execution Frontier Seoul 2026 and had a dedicated AI interoperability research track.","source_url":"https://luma.com/u9cpjyrl","contact_source":"https://www.zetachain.com/"},
-    {"company":"Tiger Research","domain":"tiger-research.com","url":"https://tiger-research.com/","email":"help@tiger-research.com","title":"Business Development / Events","language":"ko","score":99,"kbw_status":"2026 AI Agentic Finance Forum 파트너 · 서울/아시아 Web3 이벤트 운영","signal":"Tiger Research is a Seoul-based Web3 research and consulting team, appears in 2026 BUIDL Week event programming, and operates curated industry events.","source_url":"https://www.buidlkorea.com/events","contact_source":"https://tiger-research.com/about"},
-    {"company":"K1 Research","domain":"k1research.com","url":"https://k1research.com/","email":"info@k1research.com","title":"Research / Marketing / Events","language":"ko","score":100,"kbw_status":"2026 Seoul Signal 청담 직접 주최 · 스폰서 세션/호스피탈리티 운영","signal":"K1 Research hosted 2026 Seoul Signal in Cheongdam with sponsor sessions, champagne, catering, networking and event production.","source_url":"https://luma.com/ufr49cpv","contact_source":"https://k1research.com/"},
-    {"company":"Gaea Ventures","domain":"gaeaventures.org","url":"https://gaeaventures.org/","email":"gaeavc@gaeavc.com","title":"Investment / Partnerships","language":"en","score":98,"kbw_status":"2026 Seoul Signal 공식 스폰서","signal":"Gaea Ventures was a named sponsor of 2026 Seoul Signal in Seoul and currently runs its own 2026 ecosystem events.","source_url":"https://luma.com/ufr49cpv","contact_source":"https://gaeaventures.org/Event","trusted_cross_domain":true},
-    {"company":"PlaysOut","domain":"playsout.com","url":"https://playsout.com/","email":"contact@playsout.com","title":"Partnerships / Marketing","language":"en","score":98,"kbw_status":"2026 Seoul Signal 공식 스폰서 · KBW 파트너 이력","signal":"PlaysOut was a named sponsor of 2026 Seoul Signal and its official site lists KBW among trusted partners.","source_url":"https://luma.com/ufr49cpv","contact_source":"https://playsout.com/PRIVACYPOLICY.html"},
-    {"company":"BFM Times","domain":"bfmtimes.com","url":"https://bfmtimes.com/","email":"tanishk@bfmtimes.com","title":"Business / Media / Events","language":"en","score":100,"kbw_status":"KBW 2026 기간 서울 Media Accelerator & Startup Cohort 운영 예정","signal":"BFM Times is organizing a Web3 media accelerator in Seoul from September 29 to October 1, 2026 alongside Korea Blockchain Week.","source_url":"https://luma.com/t86wuwls","contact_source":"https://www.linkedin.com/in/tanishknigam"},
-    {"company":"Galxe","domain":"galxe.com","url":"https://www.galxe.com/","email":"support@galxe.com","title":"Developer Support / Partnerships Routing","language":"en","score":96,"kbw_status":"Gravity가 AI/InfraCon 2026 서울 공식 파트너로 참여","signal":"Gravity, part of the Galxe ecosystem, was listed as a partner of AI/InfraCon 2026 in Seoul; Galxe publishes a direct developer support inbox.","source_url":"https://luma.com/8nzr1zec","contact_source":"https://docs.galxe.com/galxe-integration/resources/support"},
-    {"company":"TokenPost","domain":"tokenpost.kr","url":"https://www.tokenpost.kr/","email":"info@tokenpost.kr","title":"Advertising / Partnerships","language":"ko","score":99,"kbw_status":"2026 Agent Execution Frontier Seoul 공식 미디어 파트너","signal":"TokenPost was a media partner for Agent Execution Frontier Seoul 2026 and operates a dedicated advertising/business inquiry inbox in Korea.","source_url":"https://luma.com/u9cpjyrl","contact_source":"https://advertise.tokenpost.kr/ko"},
-    {"company":"MANTRA","domain":"mantrachain.io","url":"https://mantrachain.io/","email":"contact@mantrachain.io","title":"Team / Partnerships","language":"en","score":97,"kbw_status":"KBW 서울 Real World Meetup 직접 주최 · Tiger Research 공동 행사","signal":"MANTRA directly hosted a Korea Blockchain Week meetup in Seoul with Tiger Research, including food and drinks for attendees.","source_url":"https://luma.com/mdbdi1fq","contact_source":"https://mantrachain.io/eula"},
-    {"company":"Korea Web3 Embassy","domain":"web3embassy.kr","url":"https://www.web3embassy.kr/","email":"info@web3embassy.kr","title":"General / Partnerships","language":"ko","score":97,"kbw_status":"FACTBLOCK·Kintsugi·AhnLab Blockchain Company 한국 Web3 컨소시엄","signal":"Korea Web3 Embassy is a Seoul-based consortium focused on Korean market entry, event organization, community building and global partnerships, with FACTBLOCK and AhnLab Blockchain Company among its members.","source_url":"https://www.web3embassy.kr/","contact_source":"https://www.web3embassy.kr/"},
-    {"company":"AhnLab Blockchain Company","domain":"ahnlabblockchain.company","url":"https://ahnlabblockchain.company/","email":"contact@ahnlabblockchain.company","title":"Partnerships","language":"ko","score":96,"kbw_status":"2026 VASP·Cloud Wallet 사업 본격화 · 기존 KBW 기관 행사 공동운영 이력","signal":"AhnLab Blockchain Company expanded its institutional Web3 business in 2026 and has prior Korea Blockchain Week institutional-event involvement.","source_url":"https://company.ahnlab.com/kr/news/press_release_view.do?seqPressRelease=10949","contact_source":"https://ahnlabblockchain.company/company"},
-    {"company":"Aleo Network Foundation","domain":"aleo.org","url":"https://aleo.org/","email":"hello@aleo.org","title":"Community / Events","language":"en","score":94,"kbw_status":"KBW 서울 zkHOUSE 직접 주최 이력","signal":"Aleo previously hosted a full-day zkHOUSE during Korea Blockchain Week in Seoul with workshops, meals, BBQ, community programming and awards.","source_url":"https://luma.com/zkhousekbw","contact_source":"https://aleo.org/terms/"},
-    {"company":"Notifi Network","domain":"notifi.network","url":"https://notifi.network/","email":"sales@notifi.network","title":"Sales / Partnerships","language":"en","score":94,"kbw_status":"KBW 서울 Chimaek Gangnam Style 공동주최 이력","signal":"Notifi directly co-hosted a Korea Blockchain Week networking event in Gangnam with food, cocktails and a live DJ.","source_url":"https://luma.com/kfc","contact_source":"https://docs.notifi.network/docs/faq"},
-    {"company":"BitMart","domain":"bitmart.com","url":"https://www.bitmart.com/","email":"marketing@bitmart.com","title":"Marketing / Collaborations","language":"en","score":94,"kbw_status":"KBW 서울 Chimaek Gangnam Style 공동주최 이력","signal":"BitMart directly co-hosted a Korea Blockchain Week networking event in Gangnam and publishes a collaboration inbox for marketing partnerships.","source_url":"https://luma.com/kfc","contact_source":"https://www.bitmart.com/en/support/articles/7949433565211/7949531403675/360001865494"},
-    {"company":"TAC","domain":"tac.build","url":"https://tac.build/","email":"info@tac.build","title":"General / Partnerships","language":"en","score":92,"kbw_status":"서울 Web3 생태계 행사 후보 예비군","signal":"TAC remains a Korea-relevant Web3 infrastructure prospect with a public team inbox and is retained only as a reserve if a primary lead is blocked by sent/deleted history.","source_url":"https://tac.build/","contact_source":"https://tac.build/"}
+    {
+        "company": "Saga",
+        "domain": "saga.xyz",
+        "url": "https://www.saga.xyz/",
+        "email": "info@saga.xyz",
+        "title": "Media / Ecosystem / Partnerships",
+        "score": 97,
+        "kbw_status": "2026 Open Source AI Summit Seoul 공식 연사",
+        "signal": "Saga Developer Relations joined the 2026 Open Source AI Summit in Seoul during BUIDL Week.",
+        "source_url": "https://luma.com/5ud5jwip",
+        "contact_source": "https://www.saga.xyz/media-kit"
+    },
+    {
+        "company": "WalletConnect",
+        "domain": "walletconnect.com",
+        "url": "https://walletconnect.com/",
+        "email": "sales@walletconnect.com",
+        "title": "Sales / Ecosystem Partnerships",
+        "score": 99,
+        "kbw_status": "Korea Buidl Week 2026 Coffee Connect Seoul 직접 운영",
+        "signal": "WalletConnect ran Coffee Connect during Korea Buidl Week 2026 in Seoul, creating a direct current on-site team signal.",
+        "source_url": "https://www.buidlkorea.com/events",
+        "contact_source": "https://docs.walletconnect.network/wallet-sdk/chain-support/overview"
+    },
+    {
+        "company": "Optimum",
+        "domain": "getoptimum.xyz",
+        "url": "https://www.getoptimum.xyz/",
+        "email": "info@getoptimum.xyz",
+        "title": "Team / Partnerships",
+        "score": 99,
+        "kbw_status": "Korea Buidl Week 2026 CODED @ BUIDL ASIA 직접 주최",
+        "signal": "Optimum hosted CODED @ BUIDL ASIA in Gangnam during Korea Buidl Week 2026.",
+        "source_url": "https://luma.com/ube7qfat",
+        "contact_source": "https://www.getoptimum.xyz/privacy-policy"
+    },
+    {
+        "company": "SheFi",
+        "domain": "shefi.org",
+        "url": "https://www.shefi.org/",
+        "email": "social@shefi.org",
+        "title": "Community / Partnerships",
+        "score": 99,
+        "kbw_status": "SheFi Seoul Summit 2026 직접 운영",
+        "signal": "SheFi returned to Seoul for its third SheFi Seoul Summit in 2026 with an in-person BUIDL Week program.",
+        "source_url": "https://luma.com/jz7wca0x",
+        "contact_source": "https://www.shefi.org/terms-and-condition"
+    },
+    {
+        "company": "Hyperbolic",
+        "domain": "hyperbolic.ai",
+        "url": "https://www.hyperbolic.ai/",
+        "email": "sales@hyperbolic.ai",
+        "title": "Sales / Partnerships",
+        "score": 98,
+        "kbw_status": "KBW Seoul AI After Hours 직접 주최",
+        "signal": "Hyperbolic hosted AI After Hours during Korea Blockchain Week in Seoul with a large in-person audience, drinks and light bites.",
+        "source_url": "https://luma.com/74q8pbkf",
+        "contact_source": "https://www.hyperbolic.ai/docs/reserved/getting-started"
+    },
+    {
+        "company": "B3",
+        "domain": "b3.fun",
+        "url": "https://www.b3.fun/",
+        "email": "contact@b3.fun",
+        "title": "Foundation / Partnerships",
+        "score": 98,
+        "kbw_status": "KBW Seoul Boon & B3yond activation 직접 운영",
+        "signal": "B3 ran a Korea Blockchain Week Seoul activation with hundreds of attendees, giving the team a concrete event-operations signal.",
+        "source_url": "https://luma.com/a1rzrusu",
+        "contact_source": "https://docs.b3.fun/protocol/whitepaper-mica"
+    },
+    {
+        "company": "Keplr",
+        "domain": "keplr.app",
+        "url": "https://www.keplr.app/",
+        "email": "contact@keplr.app",
+        "title": "Community / Partnerships",
+        "score": 96,
+        "kbw_status": "KBW Seoul Infra Day 현장 참여",
+        "signal": "Keplr joined Infra Day during Korea Blockchain Week in Seoul, an in-person ecosystem event with food and drinks.",
+        "source_url": "https://luma.com/jgpjd00y",
+        "contact_source": "https://privacy-policy.keplr.app/"
+    },
+    {
+        "company": "Starknet Foundation",
+        "domain": "starknetfoundation.org",
+        "url": "https://www.starknetfoundation.org/",
+        "email": "developerpartnerships@starknetfoundation.org",
+        "title": "Developer Partnerships",
+        "score": 99,
+        "kbw_status": "KBW Seoul StarkMart physical activation 운영",
+        "signal": "Starknet ran StarkMart during Korea Blockchain Week in Seoul and maintained developer-partnership activity around the ecosystem.",
+        "source_url": "https://luma.com/StarkMart",
+        "contact_source": "https://www.starknet.io/blog/the-starknet-foundation-meet-the-committees/"
+    },
+    {
+        "company": "Quack AI",
+        "domain": "quackai.ai",
+        "url": "https://quackai.ai/",
+        "email": "business@quackai.ai",
+        "title": "Business / Partnerships",
+        "score": 97,
+        "kbw_status": "AI/InfraCon 2026 Seoul 공식 파트너",
+        "signal": "Quack AI was an official partner of AI/InfraCon 2026 in Seoul during BUIDL Week.",
+        "source_url": "https://luma.com/8nzr1zec",
+        "contact_source": "https://q402.quackai.ai/grant"
+    },
+    {
+        "company": "Unibase",
+        "domain": "unibase.com",
+        "url": "https://www.unibase.com/",
+        "email": "support@unibase.com",
+        "title": "Ecosystem / Partnerships Routing",
+        "score": 100,
+        "kbw_status": "2026 BUIDL ASIA Seoul 직접 주최 · 신규 굿즈/merch share",
+        "signal": "Unibase hosted the 2026 Agent Economy Summit in Seoul with catering, newly released project merchandise and a dedicated merch-share check-in.",
+        "source_url": "https://luma.com/vhv3f8n8",
+        "contact_source": "https://www.unibase.com/aip"
+    },
+    {
+        "company": "Nethermind",
+        "domain": "nethermind.io",
+        "url": "https://www.nethermind.io/",
+        "email": "hello@nethermind.io",
+        "title": "Business / Partnerships",
+        "score": 98,
+        "kbw_status": "2026 Open Source AI Summit Seoul 공식 스폰서·연사",
+        "signal": "Nethermind sponsored the 2026 Open Source AI Summit Seoul and had its AI product team speaking on stage.",
+        "source_url": "https://luma.com/5ud5jwip",
+        "contact_source": "https://www.nethermind.io/contact-us"
+    },
+    {
+        "company": "Exabits",
+        "domain": "exabits.ai",
+        "url": "https://www.exabits.ai/",
+        "email": "contact@exabits.ai",
+        "title": "Business / Partnerships",
+        "score": 98,
+        "kbw_status": "2026 Open Source AI Summit Seoul 공식 스폰서",
+        "signal": "Exabits sponsored the 2026 Open Source AI Summit Seoul during BUIDL Week.",
+        "source_url": "https://luma.com/5ud5jwip",
+        "contact_source": "https://www.globenewswire.com/news-release/2025/04/28/3069524/0/en/Exabits-teams-up-with-NEAR-to-push-the-boundaries-of-decentralized-AI.html"
+    },
+    {
+        "company": "NEAR AI",
+        "domain": "near.ai",
+        "url": "https://near.ai/",
+        "email": "social@near.foundation",
+        "title": "AI Ecosystem / Community",
+        "score": 100,
+        "kbw_status": "BuidlHack 2026 $5K 공식 스폰서 트랙 · Seoul Summit 공동주최",
+        "signal": "NEAR AI sponsored a dedicated $5,000 BuidlHack 2026 track and co-hosted the Open Source AI Summit Seoul.",
+        "source_url": "https://www.buidlkorea.com/buidlhack2026",
+        "contact_source": "https://www.globenewswire.com/news-release/2025/04/28/3069524/0/en/Exabits-teams-up-with-NEAR-to-push-the-boundaries-of-decentralized-AI.html",
+        "trusted_cross_domain": true
+    },
+    {
+        "company": "Axelar Foundation",
+        "domain": "axelar.network",
+        "url": "https://www.axelar.network/",
+        "email": "info@axelar.foundation",
+        "title": "Foundation / Partnerships",
+        "score": 97,
+        "kbw_status": "AI/InfraCon 2026 Seoul 공식 파트너",
+        "signal": "Axelar was an official partner of AI/InfraCon 2026 in Seoul during BUIDL Week.",
+        "source_url": "https://luma.com/8nzr1zec",
+        "contact_source": "https://www.axelar.network/privacy-policy",
+        "trusted_cross_domain": true
+    },
+    {
+        "company": "Anchored Finance",
+        "domain": "anchored.finance",
+        "url": "https://anchored.finance/",
+        "email": "info@anchored.finance",
+        "title": "Business / Partnerships",
+        "score": 100,
+        "kbw_status": "RWA Forum Seoul 2026 공동주최",
+        "signal": "Anchored co-hosted the April 2026 RWA Forum in Seoul, with its CEO and strategy lead both on the program.",
+        "source_url": "https://www.rwaforum.kr/",
+        "contact_source": "https://anchored.finance/"
+    },
+    {
+        "company": "Alpaca",
+        "domain": "alpaca.markets",
+        "url": "https://alpaca.markets/",
+        "email": "support@alpaca.markets",
+        "title": "Business / Partnerships Routing",
+        "score": 99,
+        "kbw_status": "RWA Forum Seoul 2026 공동주최·CRO 연사",
+        "signal": "Alpaca co-hosted the April 2026 RWA Forum in Seoul and sent its Chief Revenue Officer to the program.",
+        "source_url": "https://www.rwaforum.kr/",
+        "contact_source": "https://alpaca.markets/contact"
+    },
+    {
+        "company": "Blue Ocean Technologies",
+        "domain": "blueocean-tech.io",
+        "url": "https://blueocean-tech.io/",
+        "email": "sales@blueoceanats.com",
+        "title": "Sales / APAC Partnerships",
+        "score": 99,
+        "kbw_status": "RWA Forum Seoul 2026 APAC 연사",
+        "signal": "Blue Ocean Technologies joined the 2026 RWA Forum in Seoul through its APAC leadership, adding a concrete Korea-facing institutional event signal.",
+        "source_url": "https://www.rwaforum.kr/",
+        "contact_source": "https://blueocean-tech.io/contact-us/",
+        "trusted_cross_domain": true
+    },
+    {
+        "company": "OpenEden",
+        "domain": "openeden.com",
+        "url": "https://openeden.com/",
+        "email": "support@openeden.com",
+        "title": "Growth / Partnerships Routing",
+        "score": 99,
+        "kbw_status": "RWA Forum Seoul 2026 CEO 연사 · 한국 핵심시장 신호",
+        "signal": "OpenEden CEO Jeremy Ng joined the 2026 RWA Forum in Seoul, and the team has continued active Korea-facing institutional RWA outreach.",
+        "source_url": "https://www.rwaforum.kr/",
+        "contact_source": "https://t.me/openeden"
+    },
+    {
+        "company": "Jito Foundation",
+        "domain": "jito.network",
+        "url": "https://www.jito.network/",
+        "email": "jitopr@mgroupsc.com",
+        "title": "Media / APAC Routing",
+        "score": 98,
+        "kbw_status": "RWA Forum Seoul 2026 Korea Lead 연사",
+        "signal": "Jito's Korea Lead joined the 2026 RWA Forum in Seoul while the foundation expanded institutional Solana infrastructure across APAC.",
+        "source_url": "https://www.rwaforum.kr/",
+        "contact_source": "https://www.globenewswire.com/news-release/2026/05/06/3288875/0/en/Jito-Foundation-and-Solana-Company-NASDAQ-HSDT-Announce-Strategic-Partnership-to-Expand-Institutional-Solana-Infrastructure-Across-Asia-Pacific-Region.html",
+        "trusted_cross_domain": true
+    },
+    {
+        "company": "EigenLayer",
+        "domain": "eigenlayer.xyz",
+        "url": "https://www.eigenlayer.xyz/",
+        "email": "builders@eigenlabs.org",
+        "title": "Developer Relations / Ecosystem",
+        "score": 98,
+        "kbw_status": "2026 Open Source AI Summit Seoul 재단 CEO 연사",
+        "signal": "EigenLayer Foundation CEO Robert Drost spoke at the 2026 Open Source AI Summit Seoul during BUIDL Week.",
+        "source_url": "https://luma.com/5ud5jwip",
+        "contact_source": "https://blog.eigencloud.xyz/celebrating-commit-boost/",
+        "trusted_cross_domain": true
+    }
   ];
 
   function normalizeDomain(value = '') {
@@ -71,7 +292,7 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !Array.isArray(data.domains)) return cached;
       const domains = [...new Set(data.domains.map(normalizeDomain).filter(Boolean))];
-      try { localStorage.setItem(SENT_CACHE_KEY, JSON.stringify(domains)); } catch {}
+      try { localStorage.setItem(SENT_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), domains })); } catch {}
       return domains;
     } catch {
       return cached;
@@ -94,6 +315,63 @@
     return result;
   }
 
+  function purgeObsoleteAndBlocked() {
+    if (typeof state === 'undefined' || !Array.isArray(state.leads)) return 0;
+    const removedIds = [];
+    const next = state.leads.filter((lead) => {
+      const id = String(lead?.id || '');
+      const domain = normalizeDomain(lead?.domain || lead?.url || lead?.contact?.email || '');
+      const obsolete = lead?.batch === OBSOLETE_BATCH || id.startsWith('kbw-fresh20-20260812:');
+      const hardBlocked = HARD_BLOCKED.has(domain);
+      const remove = obsolete || hardBlocked;
+      if (remove && lead?.id) removedIds.push(lead.id);
+      return !remove;
+    });
+    const removed = state.leads.length - next.length;
+    if (removed) {
+      state.leads = next;
+      for (const id of removedIds) state.selected?.delete?.(id);
+    }
+    if (state.rejected instanceof Set) {
+      for (const domain of HARD_BLOCKED) state.rejected.add(domain);
+    }
+    return removed;
+  }
+
+  function installHardBlockFetchGuard() {
+    if (window.fetch?.__kbwHardBlock20260812v2) return;
+    const originalFetch = window.fetch.bind(window);
+    const guardedFetch = async function(input, init = {}) {
+      const response = await originalFetch(input, init);
+      const url = typeof input === 'string' ? input : input?.url || '';
+      const method = String(init.method || (typeof input !== 'string' ? input?.method : '') || 'GET').toUpperCase();
+      let isHunt = false;
+      try {
+        const parsed = new URL(url, location.origin);
+        isHunt = method === 'POST' && parsed.origin === location.origin && parsed.pathname === '/api/hunt';
+      } catch {
+        isHunt = false;
+      }
+      if (!isHunt) return response;
+
+      const data = await response.clone().json().catch(() => null);
+      if (!data || !Array.isArray(data.leads)) return response;
+      const leads = data.leads.filter((lead) => {
+        const domain = normalizeDomain(lead?.domain || lead?.url || lead?.contact?.email || '');
+        return !HARD_BLOCKED.has(domain);
+      });
+      if (leads.length === data.leads.length) return response;
+
+      return new Response(JSON.stringify({ ...data, leads }), {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      });
+    };
+    guardedFetch.__kbwHardBlock20260812v2 = true;
+    window.fetch = guardedFetch;
+  }
+
   function makeContact(row) {
     const companyDomain = normalizeDomain(row.domain);
     const emailDomain = normalizeDomain(row.email);
@@ -102,8 +380,10 @@
       name: `${row.company} Team`,
       title: row.title,
       emailStatus: 'valid',
+      email_status: 'verified',
       type: row.email.split('@')[0].includes('.') ? 'personal' : 'generic',
       sources: [row.contact_source],
+      source_url: row.contact_source,
       providers: ['manual_db', 'official_web'],
       provider: 'manual_db+official_web',
       score: 99,
@@ -114,21 +394,28 @@
       lookupDomain: row.domain,
       priority: row.score >= 98 ? 10 : 30,
       verifiedAt: '2026-08-12',
-      sourceLabel: 'Public contact verified for KBW/Korea event outreach'
+      sourceLabel: 'Public business contact verified for Seoul/KBW outreach'
     };
   }
 
   function makeLead(row) {
     const contact = makeContact(row);
-    const isKo = row.language === 'ko';
-    const question = isKo
-      ? '올해 KBW 기간에 서울 행사나 팀 일정이 예정되어 있을까요?'
-      : 'Have you already sorted team shirts or staff merch for your Seoul plans?';
-    const messageKo = `안녕하세요.\n\n${row.signal}\n\n${question}\n\n필요하시면 티셔츠·후디·스태프 의류를 서울에서 제작해 호텔·사무실·행사장으로 바로 납품할 수 있습니다. 아직 준비 전이라면 가격과 납기를 포함한 옵션 2~3가지만 보내드리겠습니다.`;
-    const messageEn = `Hi,\n\nI saw ${row.company}'s recent Seoul/Korea event activity. ${row.signal}\n\n${question}\n\nWe produce T-shirts, hoodies and staff wear locally in Seoul and can deliver directly to your hotel, office or venue. If merch is still open, I can send 2–3 options with pricing and turnaround times.`;
+    const question = 'Have you already sorted team shirts, staff wear, or event merch for your next Seoul visit?';
+    const messageEn = `Hi ${row.company} team,
+
+I saw ${row.company}'s recent Seoul/Korea event activity. ${row.signal}
+
+${question}
+
+We produce T-shirts, hoodies, caps and staff wear locally in Seoul and can deliver directly to your hotel, office or venue. If apparel is still open, I can send 2–3 practical options with USD pricing and turnaround times for 20 / 50 / 100 units.
+
+Would it be useful if I send the options?
+
+Best,
+NYF`;
 
     return {
-      id: `kbw-fresh20-20260812:${normalizeDomain(row.domain)}`,
+      id: `kbw-fresh20-20260812-v2:${normalizeDomain(row.domain)}`,
       batch: BATCH,
       campaign: 'kbw',
       campaign_label: 'KBW 단체복',
@@ -142,24 +429,29 @@
       score: row.score,
       sales_priority: row.score + 35,
       win_score: Math.min(100, row.score),
-      win_label: '승산 있음',
-      opportunity_lane: 'fresh-kbw-korea-20260812',
+      win_label: row.score >= 98 ? '승산 높음' : '우선 연락',
+      opportunity_lane: 'fresh-overseas-kbw-korea-20260812',
       reachability: row.score >= 98 ? '접근 최우선' : '접근 우선',
       kbw_status: row.kbw_status,
       kbw_status_code: 'verified',
-      outreach_language: row.language,
+      outreach_language: 'en',
       verified_company: true,
-      verified_by: 'manual-research+official-web+sent-audit',
-      quality_reasons: ['기존 정적 후보 코드 미포함', 'Gmail 발송 이력 사전 대조', '공개 연락처 근거 확인', '서울·KBW·Korea Web3 이벤트 신호 확인'],
-      tool_signals: ['manual_research', 'official_web', 'luma_or_kbw_signal', 'gmail_sent_audit'],
+      verified_by: '2026-08-12 Luma/Korea Buidl Week/official web + Gmail Sent audit',
+      quality_reasons: [
+        '해외/글로벌 팀',
+        '서울·KBW·Korea Buidl Week 현장 신호 확인',
+        '공개 업무 이메일 근거 확인',
+        '기존 하드코딩 후보 제외',
+        'Gmail 발송 이력 사전 대조'
+      ],
+      tool_signals: ['fresh_2026_seoul', 'luma_or_kbw', 'verified_public_email', 'gmail_sent_audit'],
       recommended_role: row.title,
-      role_targets: ['Events Lead', 'Partnerships Lead', 'Community Lead', 'Head of Marketing'],
-      offer: 'KBW 기간 티셔츠·후디·스태프 의류를 서울 현지에서 제작·납품',
+      role_targets: [row.title, 'Events', 'Partnerships', 'Marketing', 'Community'],
+      offer: 'KBW 기간 서울 방문 팀웨어·스태프웨어·커스텀 의류 현지 제작·납품',
       outreach_goal: 'reply',
       outreach_stage: 'first_touch',
       reply_question: question,
-      subject: isKo ? `${row.company} KBW 행사 준비 관련` : `Quick question about ${row.company}'s Seoul plans`,
-      message_ko: messageKo,
+      subject: `Quick question about ${row.company}'s Seoul plans`,
       message_en: messageEn,
       contact,
       contacts: [contact],
@@ -167,7 +459,8 @@
       contact_status: 'found',
       hardcoded_email_override: true,
       hardcoded_email_source: row.contact_source,
-      fresh20_20260812: true
+      fresh20_20260812: true,
+      fresh20_version: 2
     };
   }
 
@@ -177,6 +470,8 @@
       return;
     }
 
+    installHardBlockFetchGuard();
+    const removed = purgeObsoleteAndBlocked();
     const sent = await liveSentDomains();
     const deleted = storedDomains(DELETED_KEY);
     const rejected = state.rejected instanceof Set
@@ -201,23 +496,26 @@
 
     const chosenRows = eligibleRows.slice(0, EXPECTED);
     const added = mergeLeads(chosenRows.map(makeLead));
-    if (added.length && typeof saveState === 'function') saveState();
-    if (added.length && typeof render === 'function') render();
+    if ((added.length || removed) && typeof saveState === 'function') saveState();
+    if ((added.length || removed) && typeof render === 'function') render();
 
-    state.statusText = `KBW 최신 신규 후보 ${added.length}/${EXPECTED} 추가 · 발송/추가/삭제/반송 주소 제외 · 2026-08-12 검증`;
+    state.statusText = `KBW 해외 신규 후보 ${added.length}/${EXPECTED} 추가 · 발송/추가/삭제/반송/영업종료 제외 · 2026-08-12 재검증`;
     if (typeof saveState === 'function') saveState();
     if (typeof render === 'function') render();
 
     window.KBWFresh20_20260812 = {
       batch: BATCH,
+      version: 2,
       researched: ROWS.length,
       eligible: eligibleRows.length,
       selected: chosenRows.map((row) => row.company),
       added: added.map((lead) => lead.company),
       excluded: ROWS.filter((row) => !chosenRows.includes(row)).map((row) => row.company),
-      blockedDomains: [...blocked]
+      blockedDomains: [...blocked],
+      obsoleteRemoved: removed
     };
   }
 
+  installHardBlockFetchGuard();
   inject();
 })();
