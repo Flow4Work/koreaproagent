@@ -9,6 +9,16 @@ function safeMessage(text = '') {
     .slice(0, 280);
 }
 
+function deploymentMetadata() {
+  const deploymentUrl = String(process.env.VERCEL_URL || '').trim();
+  return {
+    deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+    deploymentBranch: process.env.VERCEL_GIT_COMMIT_REF || null,
+    deploymentEnvironment: process.env.VERCEL_ENV || null,
+    deploymentUrl: deploymentUrl ? `https://${deploymentUrl}` : null
+  };
+}
+
 export async function GET() {
   const opencodeConfigured = aiConfigured();
   const groqKeyConfigured = groqConfigured();
@@ -29,6 +39,7 @@ export async function GET() {
 
   const result = {
     ok: Boolean(searchReady && aiReady),
+    ...deploymentMetadata(),
     searchReady,
     aiReady,
     aiProvider: AI_PROVIDER,
