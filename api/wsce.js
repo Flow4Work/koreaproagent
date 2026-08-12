@@ -1,1 +1,1 @@
-export { POST } from '../lib/wsce-v3.js';
+export { POST } from '../lib/wsce-v4.js';
