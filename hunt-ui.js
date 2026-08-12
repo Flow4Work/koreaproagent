@@ -80,6 +80,24 @@
 })();
 
 (() => {
+  if (document.querySelector('script[data-wsce-contact-guard]')) return;
+  let attempts = 0;
+  const load = () => {
+    if (document.querySelector('script[data-wsce-contact-guard]')) return;
+    if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
+      const script = document.createElement('script');
+      script.src = '/wsce-live-contact-guard.js?v=20260813-wsce-live-v1';
+      script.dataset.wsceContactGuard = '1';
+      document.head.appendChild(script);
+      return;
+    }
+    attempts += 1;
+    if (attempts < 160) setTimeout(load, 50);
+  };
+  load();
+})();
+
+(() => {
   if (document.querySelector('script[data-campaign-run-controller]')) return;
   let attempts = 0;
   const load = () => {
