@@ -7,7 +7,8 @@
     {"source": "/api/email/auth-start", "destination": "/api/gmail?action=auth"},
     {"source": "/api/email/send", "destination": "/api/gmail"},
     {"source": "/api/discover-clients", "destination": "/api/discover"},
-    {"source": "/api/discover-v2", "destination": "/api/discover"}
+    {"source": "/api/discover-v2", "destination": "/api/discover"},
+    {"source": "/api/wsce", "destination": "/api/wsce-v2"}
   ],
   "headers": [
     {
@@ -25,6 +26,7 @@
     "api/hunt.js": {"maxDuration": 45},
     "api/bcww.js": {"maxDuration": 120},
     "api/wsce.js": {"maxDuration": 120},
+    "api/wsce-v2.js": {"maxDuration": 120},
     "api/education-fair.js": {"maxDuration": 120},
     "api/contact.js": {"maxDuration": 120},
     "api/deleted.js": {"maxDuration": 30},
