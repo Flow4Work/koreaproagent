@@ -42,14 +42,40 @@ const SEARCH_BATCHES = [
     'BCWW 2026 selected company',
     'BCWW 2026 delegation',
     'BCWW 2026 pavilion'
+  ],
+  [
+    'site:10times.com/broadcast-worldwide-seoul/visitors "Hong Kong"',
+    'site:10times.com/broadcast-worldwide-seoul/visitors Thailand',
+    'site:10times.com/broadcast-worldwide-seoul/visitors Vietnam',
+    'site:10times.com/broadcast-worldwide-seoul/visitors India',
+    'site:10times.com/broadcast-worldwide-seoul/visitors Mongolia',
+    'site:10times.com/broadcast-worldwide-seoul/visitors Nepal'
   ]
+];
+
+const CURRENT_INTEREST_URL = 'https://10times.com/broadcast-worldwide-seoul/visitors';
+
+// Public 2026 event-interest signals found before implementing this pipeline.
+// These are NOT asserted as confirmed exhibitors. They are valid prospect seeds because the
+// current BCWW 2026 event page lists their representatives as followers / interested attendees.
+const PUBLIC_INTEREST_SEEDS = [
+  { company:'Xiaowu Bros.', country:'Hong Kong' },
+  { company:'Central Television', country:'Mongolia' },
+  { company:'J J P Corporation', country:'Thailand' },
+  { company:'GMM Studios International', country:'Thailand' },
+  { company:'Chitrakala Productions Pvt. Ltd.', country:'Nepal' },
+  { company:'Vietnam Television Cable Corporation', country:'Vietnam' },
+  { company:'Triple Nine Global', country:'Bangladesh' },
+  { company:'IN10 Media Network', country:'India' },
+  { company:'The Seagull Films', country:'United States' },
+  { company:'Ladybirdco', country:'Iran' }
 ];
 
 const SOURCE_DOMAINS = new Set([
   'bcww.kr','coex.co.kr','coexcenter.com','linkedin.com','x.com','twitter.com',
   'facebook.com','instagram.com','youtube.com','bizinfo.go.kr','connectplt.kr',
   'globalexhibition.org','kocca.kr','mcst.go.kr','crunchbase.com','imdb.com',
-  'variety.com','deadline.com','thetvdb.com','prtimes.jp','vipo.or.jp'
+  'variety.com','deadline.com','thetvdb.com','prtimes.jp','vipo.or.jp','10times.com'
 ]);
 
 const BAD_DOMAIN_PARTS = /(news|press|blog|medium|wikipedia|eventbrite|meetup|directory|exhibition|conference)/i;
@@ -57,6 +83,7 @@ const BCWW_ANY = /(?:\bBCWW\b|Broadcast\s*World\s*Wide)/i;
 const BCWW_2026 = /(?:\bBCWW\s*2026\b|Broadcast\s*World\s*Wide[^\n]{0,80}\b2026\b)/i;
 const BCWW_2025 = /\bBCWW\s*2025\b/i;
 const STRONG_PARTICIPATION = /(stand\s*(?:no\.?|#)?\s*[a-z0-9-]+|booth\s*(?:no\.?|#)?\s*[a-z0-9-]+|exhibitor|exhibiting|participat(?:e|es|ed|ing|ion)\s+(?:in|at)|attend(?:s|ed|ing)?\s+(?:BCWW|the\s+BCWW)|join(?:s|ed|ing)?\s+(?:BCWW|us\s+at\s+BCWW)|we(?:'re| are| will be)\s+(?:at|joining|attending|exhibiting)|meet\s+us\s+(?:at|in)|see\s+you\s+(?:at|in)|showcase(?:\s+(?:participant|company|at\s+BCWW))?|pitch(?:es|ed|ing)?\s+(?:at|during|for)\s+BCWW|screen(?:s|ed|ing)?\s+(?:at|during)\s+BCWW|selected\s+(?:for|to\s+join|to\s+participate\s+in)\s+(?:the\s+)?BCWW|delegation\s+(?:to|at)\s+BCWW|pavilion\s+(?:at|for)\s+BCWW|出展(?:します|予定|企業)?|参加(?:します|予定|企業|会社)?|ピッチ(?:登壇|参加)?|採択|選出|ブース|참가(?:합니다|예정|기업)?|출전|부스|피칭|선정|參展|参展|參加|参加|展位|入選|入选)/i;
+const INTEREST_SIGNAL = /(followers?|users?\s+who\s+have\s+shown\s+interest|shown\s+interest\s+for\s+this\s+event|people\s+attending|heading\s+to\s+the\s+event|interested\s+attendees?|event-interest|참가\s*관심)/i;
 const RECRUITMENT_ONLY = /(registration\s+(?:is\s+)?(?:now\s+)?open|register\s+(?:now|here)|applications?\s+(?:are\s+)?open|apply\s+(?:now|here|by)|application\s+deadline|call\s+for\s+(?:exhibitors?|applications?|entries)|recruit(?:ing|ment)|募集|応募|申込|公募|모집(?:공고)?|공모|신청(?:기간|방법)?|접수(?:기간)?|招募|报名|報名)/i;
 const CONFIRMED_LANGUAGE = /(we(?:'re| are| will be)|our\s+(?:team|company)|selected|confirmed|official\s+delegation|will\s+(?:attend|join|exhibit|showcase|pitch)|participating|exhibiting|attending|joining|出展します|出展予定|参加します|参加予定|採択|選出|참가합니다|참가예정|선정|參展|参展|入選|入选)/i;
 const KOREA_ENTITY = /(?:\bKorea\b|코리아|한국(?:지사|법인|오피스|사무소)?)/i;
@@ -76,7 +103,10 @@ const COUNTRY_PATTERNS = [
   ['Netherlands', /\bNetherlands|Dutch\b/i], ['Sweden', /\bSweden|Swedish\b/i],
   ['Norway', /\bNorway|Norwegian\b/i], ['Denmark', /\bDenmark|Danish\b/i],
   ['Finland', /\bFinland|Finnish\b/i], ['Brazil', /\bBrazil|Brazilian\b/i],
-  ['Mexico', /\bMexico|Mexican\b/i], ['United Arab Emirates', /\bUnited\s+Arab\s+Emirates\b|\bUAE\b/i]
+  ['Mexico', /\bMexico|Mexican\b/i], ['United Arab Emirates', /\bUnited\s+Arab\s+Emirates\b|\bUAE\b/i],
+  ['Mongolia', /\bMongolia(?:n)?\b|Ulaanbaatar/i], ['Nepal', /\bNepal(?:ese)?\b|Kathmandu/i],
+  ['Bangladesh', /\bBangladesh(?:i)?\b|Dhaka/i], ['Iran', /\bIran(?:ian)?\b|Tehran/i],
+  ['Sri Lanka', /\bSri\s+Lanka(?:n)?\b|Colombo|Kalutara/i]
 ];
 
 const CCTLD_COUNTRY = new Map([
@@ -85,7 +115,8 @@ const CCTLD_COUNTRY = new Map([
   ['in','India'],['au','Australia'],['nz','New Zealand'],['us','United States'],['ca','Canada'],
   ['uk','United Kingdom'],['fr','France'],['de','Germany'],['es','Spain'],['it','Italy'],
   ['nl','Netherlands'],['se','Sweden'],['no','Norway'],['dk','Denmark'],['fi','Finland'],
-  ['br','Brazil'],['mx','Mexico'],['ae','United Arab Emirates']
+  ['br','Brazil'],['mx','Mexico'],['ae','United Arab Emirates'],['mn','Mongolia'],['np','Nepal'],
+  ['bd','Bangladesh'],['ir','Iran'],['lk','Sri Lanka']
 ]);
 
 const clean = (value = '', max = 500) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
@@ -117,6 +148,11 @@ function directParticipation(text = '', publishedDate = '') {
   if (!currentBcwwContext(value, publishedDate) || !STRONG_PARTICIPATION.test(value)) return false;
   if (RECRUITMENT_ONLY.test(value) && !CONFIRMED_LANGUAGE.test(value)) return false;
   return true;
+}
+
+function currentInterest(text = '', publishedDate = '') {
+  const value = clean(text, 12000);
+  return currentBcwwContext(value, publishedDate) && INTEREST_SIGNAL.test(value);
 }
 
 function inferCountry(text = '', domain = '') {
@@ -221,30 +257,39 @@ async function mapLimit(items = [], limit = 5, worker) {
 }
 
 function flattenSearchRows(searches = []) {
-  const seen = new Set();
-  const rows = [];
+  const byUrl = new Map();
   for (const search of searches) {
     for (const row of Array.isArray(search?.results) ? search.results : []) {
       const url = clean(row?.url, 500);
       if (!/^https?:\/\//i.test(url)) continue;
       const key = url.replace(/\/$/, '');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      rows.push({
+      const next = {
         title: clean(row?.title, 260), url,
-        content: clean(row?.content || row?.snippet || row?.description, 1800),
+        content: clean(row?.content || row?.snippet || row?.description, 3500),
         published_date: clean(row?.published_date, 80),
         engine: clean(row?._engine || row?.source, 60) || 'web',
         score: Number(row?.score) || 0
+      };
+      const previous = byUrl.get(key);
+      if (!previous) {
+        byUrl.set(key, next);
+        continue;
+      }
+      byUrl.set(key, {
+        ...previous,
+        title: previous.title || next.title,
+        content: clean(`${previous.content} ${next.content}`, 10000),
+        published_date: previous.published_date || next.published_date,
+        score: Math.max(previous.score, next.score)
       });
     }
   }
-  return rows.sort((a, b) => b.score - a.score);
+  return [...byUrl.values()].sort((a, b) => b.score - a.score);
 }
 
 async function hydrateRows(searches = []) {
   const raw = flattenSearchRows(searches);
-  const likely = raw.filter(row => BCWW_ANY.test(`${row.title} ${row.content} ${row.url}`)).slice(0, 48);
+  const likely = raw.filter(row => BCWW_ANY.test(`${row.title} ${row.content} ${row.url}`)).slice(0, 56);
   const hydrated = await mapLimit(likely, 6, async row => {
     const page = await fetchEvidencePage(row.url);
     return { ...row, content: clean(`${row.content} ${page}`, 12000) };
@@ -256,37 +301,48 @@ async function hydrateRows(searches = []) {
     seen.add(key);
     return true;
   });
-  rows.sort((a, b) => Number(directParticipation(`${b.title} ${b.content}`, b.published_date)) - Number(directParticipation(`${a.title} ${a.content}`, a.published_date)) || b.score - a.score);
-  return { rawCount: raw.length, likelyCount: likely.length, rows: rows.slice(0, 72).map((row, index) => ({ ...row, id: `r${index}` })) };
+  rows.sort((a, b) =>
+    Number(directParticipation(`${b.title} ${b.content}`, b.published_date)) - Number(directParticipation(`${a.title} ${a.content}`, a.published_date)) ||
+    Number(currentInterest(`${b.title} ${b.content}`, b.published_date)) - Number(currentInterest(`${a.title} ${a.content}`, a.published_date)) ||
+    b.score - a.score
+  );
+  return { rawCount: raw.length, likelyCount: likely.length, rows: rows.slice(0, 84).map((row, index) => ({ ...row, id: `r${index}` })) };
 }
 
 async function aiExtractChunk(rows = []) {
   if (!rows.length || !aiConfigured()) return [];
-  const prompt = `Find NAMED non-Korean organizations with credible current evidence that they will take part in BCWW 2026 in Seoul.
+  const prompt = `Find NAMED non-Korean organizations with useful current BCWW 2026 sales evidence.
 
-Accept: exhibitor/booth/stand, explicit attendance/joining, showcase/screening/pitch, selected participant, overseas delegation/pavilion, or named registered seller/buyer. The evidence may be English, Japanese, Korean or Chinese.
-A 2026-dated page/post saying the company is attending BCWW may count even if the snippet omits the year after the event name.
+Two valid tiers:
+1) CONFIRMED: exhibitor/booth/stand, explicit attendance/joining, showcase/screening/pitch, selected participant, overseas delegation/pavilion, or named registered seller/buyer.
+2) INTEREST: a current 2026 event directory explicitly lists the organization's representative among BCWW 2026 followers, people attending, or users who have shown interest. This is a prospect signal, NOT a confirmed exhibitor claim.
 
-Reject: generic recruitment/registration posts with no named participant, 2025-only evidence, organizers merely promoting the event, likes/reposts without participation evidence, Korean companies/subsidiaries, and speaker-only mentions unless the company itself is stated to participate.
+The evidence may be English, Japanese, Korean or Chinese.
+Reject generic recruitment/registration posts with no named organization, 2025-only evidence, organizers merely promoting the event, Korean companies/subsidiaries, irrelevant individuals, and speaker-only mentions unless the company itself is participating.
 Never invent company, country, website or domain.
-Return JSON only: {"items":[{"row_id":"r0","company":"official organization name","country":"Japan or empty","participation":"booth|exhibitor|attendance|showcase|pitch|delegation|seller|buyer","confidence":90}]}
-Only confidence >= 82.
+Return JSON only:
+{"items":[{"row_id":"r0","company":"official organization name","country":"Japan or empty","participation":"booth|exhibitor|attendance|showcase|pitch|delegation|seller|buyer|interest","confidence":90}]}
+Use confidence >=82 for confirmed, >=76 for interest.
 
-ROWS:\n${JSON.stringify(rows.map(row => ({ row_id: row.id, title: row.title, url: row.url, published_date: row.published_date, text: clean(row.content, 4500) })))}`;
+ROWS:
+${JSON.stringify(rows.map(row => ({ row_id: row.id, title: row.title, url: row.url, published_date: row.published_date, text: clean(row.content, 5500) })))}`;
   try {
-    const result = await chatJson({ prompt, maxTokens: 2400, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 42000 });
+    const result = await chatJson({ prompt, maxTokens: 3000, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 42000 });
     const items = Array.isArray(result?.data?.items) ? result.data.items : [];
     return items.map(item => ({
       row_id: clean(item?.row_id, 20), company: clean(item?.company, 140), country: clean(item?.country, 80),
       participation: clean(item?.participation, 80), confidence: Number(item?.confidence) || 0
-    })).filter(item => item.row_id && item.company && item.confidence >= 82);
+    })).filter(item => {
+      if (!item.row_id || !item.company) return false;
+      return item.participation === 'interest' ? item.confidence >= 76 : item.confidence >= 82;
+    });
   } catch { return []; }
 }
 
 async function aiExtract(rows = []) {
   if (!rows.length || !aiConfigured()) return [];
   const chunks = [];
-  for (let i = 0; i < Math.min(rows.length, 60); i += 15) chunks.push(rows.slice(i, i + 15));
+  for (let i = 0; i < Math.min(rows.length, 72); i += 15) chunks.push(rows.slice(i, i + 15));
   return (await Promise.all(chunks.map(aiExtractChunk))).flat();
 }
 
@@ -348,7 +404,7 @@ async function resolveExtractedCandidates(items = [], rows = [], excludes = new 
     if (seen.has(key)) continue;
     seen.add(key);
     unique.push({ item, source });
-    if (unique.length >= 24) break;
+    if (unique.length >= 30) break;
   }
   return (await mapLimit(unique, 5, async ({ item, source }) => {
     const sourceText = `${source.title} ${source.content}`;
@@ -369,22 +425,58 @@ async function verifyDirectCandidates(items = []) {
   })).filter(Boolean);
 }
 
+async function resolveSeedCandidates(excludes = new Set()) {
+  const source = {
+    title: 'BCWW 2026 current attendee-interest directory',
+    url: CURRENT_INTEREST_URL,
+    content: 'Broadcast Worldwide BCWW 2026 followers and users who have shown interest for this event',
+    published_date: '2026'
+  };
+  return (await mapLimit(PUBLIC_INTEREST_SEEDS, 5, async seed => {
+    if (isKoreanCountry(seed.country)) return null;
+    const official = await resolveOfficialDomain(seed.company, seed.country, excludes, source);
+    if (!official) return null;
+    const domain = normalizeCompanyKey(official.domain);
+    if (!domain || excludes.has(domain)) return null;
+    return {
+      company: seed.company,
+      country: seed.country,
+      participation: 'interest',
+      confidence: 80,
+      ...official,
+      source
+    };
+  })).filter(Boolean);
+}
+
 function leadFrom(candidate) {
   const company = clean(candidate.company, 140);
   const domain = rootHost(candidate.domain);
   const source = candidate.source || {};
   const participation = clean(candidate.participation, 80) || 'participation';
+  const interestOnly = participation === 'interest';
+  const confidence = Number(candidate.confidence) || (interestOnly ? 80 : 88);
   return {
     id: `bcww:${domain}`, campaign: 'bcww', campaign_label: 'BCWW 단체복', company, domain,
     url: candidate.url || `https://${domain}/`, source_url: clean(source.url, 500), source_title: clean(source.title, 260),
-    published_date: clean(source.published_date, 80), signal: `${company} is confirmed for BCWW 2026 (${participation})`,
-    score: Math.max(82, Math.min(99, Number(candidate.confidence) || 88)),
-    sales_priority: Math.max(82, Math.min(99, Number(candidate.confidence) || 88)),
-    verified_company: true, bcww_confirmed: true, team_origin: 'foreign', team_origin_country: clean(candidate.country, 80),
+    published_date: clean(source.published_date, 80),
+    signal: interestOnly
+      ? `${company} appears in a current BCWW 2026 attendee-interest listing`
+      : `${company} is confirmed for BCWW 2026 (${participation})`,
+    score: Math.max(76, Math.min(99, confidence)),
+    sales_priority: Math.max(76, Math.min(99, confidence)),
+    verified_company: true,
+    bcww_confirmed: true,
+    bcww_participation_confirmed: !interestOnly,
+    bcww_interest: interestOnly,
+    bcww_signal_tier: interestOnly ? 'interest' : 'confirmed',
+    team_origin: 'foreign', team_origin_country: clean(candidate.country, 80),
     outreach_language: 'en', recommended_role: 'Events Lead',
     role_targets: ['Events Lead','Event Marketing','Marketing Director','Partnerships Lead','Operations Lead','Business Development Director','Founder','CEO'],
-    subject: `Quick question about ${company} at BCWW 2026`,
-    message_en: `Hi,\n\nI saw that ${company} is participating in BCWW 2026 in Seoul. Quick question — have you already sorted team shirts or staff wear for the trip?\n\nWe produce branded apparel locally in Seoul and can deliver directly to your hotel, office or COEX, so your team does not have to manufacture overseas, ship boxes into Korea, or coordinate with Korean vendors after arrival.\n\nIf it is still open, I can send a few local options with pricing and turnaround.`,
+    subject: `Quick question about BCWW 2026 in Seoul`,
+    message_en: interestOnly
+      ? `Hi,\n\nI came across ${company} in the current BCWW 2026 attendee-interest listings for Seoul. If your team is planning to attend, have you already sorted team shirts or staff wear for the trip?\n\nWe produce branded apparel locally in Seoul and can deliver directly to your hotel, office or COEX, so your team does not have to manufacture overseas, ship boxes into Korea, or coordinate with Korean vendors after arrival.\n\nIf it is still open, I can send a few local options with pricing and turnaround.`
+      : `Hi,\n\nI saw that ${company} is participating in BCWW 2026 in Seoul. Quick question — have you already sorted team shirts or staff wear for the trip?\n\nWe produce branded apparel locally in Seoul and can deliver directly to your hotel, office or COEX, so your team does not have to manufacture overseas, ship boxes into Korea, or coordinate with Korean vendors after arrival.\n\nIf it is still open, I can send a few local options with pricing and turnaround.`,
     message_ko: '', contact: null, contact_status: 'pending'
   };
 }
@@ -403,15 +495,34 @@ export async function POST(request) {
   const excludes = new Set([...existing, ...history.sent, ...history.deleted].map(normalizeCompanyKey).filter(Boolean));
 
   try {
-    const searches = await Promise.all(SEARCH_BATCHES.map(batch => tavilySearchMany(batch, { maxResults: 16, timeRange: 'year', topic: 'general' })));
+    const [searches, anchorText, seedCandidates] = await Promise.all([
+      Promise.all(SEARCH_BATCHES.map(batch => tavilySearchMany(batch, { maxResults: 16, timeRange: 'year', topic: 'general' }))),
+      fetchEvidencePage(CURRENT_INTEREST_URL),
+      resolveSeedCandidates(excludes)
+    ]);
+
+    if (anchorText) {
+      searches.push({
+        results: [{
+          title: 'BCWW 2026 - current followers / people attending / interested companies',
+          url: CURRENT_INTEREST_URL,
+          content: anchorText,
+          published_date: '2026',
+          source: 'bcww-interest-anchor',
+          score: 1
+        }]
+      });
+    }
+
     const hydrated = await hydrateRows(searches);
     const rows = hydrated.rows;
     const strongRows = rows.filter(row => directParticipation(`${row.title} ${row.content}`, row.published_date));
+    const interestRows = rows.filter(row => currentInterest(`${row.title} ${row.content}`, row.published_date));
 
     const [directRaw, extracted] = await Promise.all([directCandidates(rows, excludes), aiExtract(rows)]);
     const [direct, resolved] = await Promise.all([verifyDirectCandidates(directRaw), resolveExtractedCandidates(extracted, rows, excludes)]);
 
-    const combined = [...direct, ...resolved];
+    const combined = [...direct, ...resolved, ...seedCandidates];
     const seen = new Set();
     const provisional = [];
     for (const candidate of combined.sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))) {
@@ -421,7 +532,7 @@ export async function POST(request) {
       if (obviouslyKorean(candidate.company, domain, `${candidate.source?.title || ''} ${candidate.source?.content || ''}`)) continue;
       seen.add(domain);
       provisional.push(leadFrom(candidate));
-      if (provisional.length >= 25) break;
+      if (provisional.length >= 35) break;
     }
 
     const secret = historySecret();
@@ -440,15 +551,19 @@ export async function POST(request) {
         bcww_search_hits: hydrated.likelyCount,
         searched_rows: rows.length,
         strong_evidence_rows: strongRows.length,
+        interest_evidence_rows: interestRows.length,
         direct_candidates: direct.length,
         ai_extracted: extracted.length,
         resolved_foreign_candidates: resolved.length,
+        seeded_interest_candidates: seedCandidates.length,
+        confirmed_returned: leads.filter(lead => lead.bcww_participation_confirmed).length,
+        interest_returned: leads.filter(lead => lead.bcww_interest).length,
         sent_preexcluded: history.sent.length,
         sent_exact_suppressed: provisional.length - leads.length,
         deleted_preexcluded: history.deleted.length,
         search_batches: SEARCH_BATCHES.length,
         search_queries: SEARCH_BATCHES.reduce((sum, batch) => sum + batch.length, 0),
-        participation_gate: 'BCWW 2026 current exhibitor/attendance/showcase/pitch/delegation/registered seller-buyer evidence; multilingual',
+        participation_gate: 'BCWW 2026 confirmed participation plus current public attendee-interest signals; foreign companies only',
         recruitment_only_rejected: true,
         team_origin_gate: 'foreign only; Korea and unresolved origin rejected',
         historical_participants_allowed: false,
