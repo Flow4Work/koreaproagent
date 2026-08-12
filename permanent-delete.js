@@ -1,6 +1,10 @@
 (() => {
   const DELETED_KEY = 'kpa.hunt.deletedDomains.v1';
+  const REMOTE_ENDPOINT = '/api/deleted';
   const MAX_DELETED = 2000;
+  let remoteDeleted = new Set();
+  let remoteLoaded = false;
+  let remoteLoading = null;
 
   function clean(value = '', max = 500) {
     return String(value || '').trim().slice(0, max);
@@ -29,7 +33,7 @@
     return normalizeDomain(lead.domain || lead.url || lead.contact?.email || '');
   }
 
-  function readDeleted() {
+  function readLocalDeleted() {
     try {
       const values = JSON.parse(localStorage.getItem(DELETED_KEY) || '[]');
       return new Set((Array.isArray(values) ? values : []).map(normalizeDomain).filter(Boolean));
@@ -38,13 +42,61 @@
     }
   }
 
-  function writeDeleted(domains) {
+  function writeLocalDeleted(domains) {
     localStorage.setItem(DELETED_KEY, JSON.stringify([...domains].slice(-MAX_DELETED)));
+  }
+
+  function allDeleted() {
+    return new Set([...readLocalDeleted(), ...remoteDeleted]);
+  }
+
+  async function requestJson(url, options = {}) {
+    const response = await fetch(url, {
+      cache: 'no-store',
+      credentials: 'same-origin',
+      ...options
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    return data;
+  }
+
+  async function loadRemoteDeleted() {
+    if (remoteLoaded) return remoteDeleted;
+    if (remoteLoading) return remoteLoading;
+    remoteLoading = (async () => {
+      const data = await requestJson(`${REMOTE_ENDPOINT}?t=${Date.now()}`);
+      remoteDeleted = new Set((Array.isArray(data.domains) ? data.domains : []).map(normalizeDomain).filter(Boolean));
+      remoteLoaded = true;
+
+      const merged = allDeleted();
+      writeLocalDeleted(merged);
+
+      const localOnly = [...readLocalDeleted()].filter(domain => !remoteDeleted.has(domain));
+      for (let index = 0; index < localOnly.length; index += 200) {
+        const batch = localOnly.slice(index, index + 200);
+        if (!batch.length) continue;
+        const synced = await requestJson(REMOTE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ items: batch.map(domain => ({ key: domain, name: domain })) })
+        }).catch(() => null);
+        if (synced?.ok) batch.forEach(domain => remoteDeleted.add(domain));
+      }
+      return remoteDeleted;
+    })().finally(() => { remoteLoading = null; });
+    return remoteLoading;
+  }
+
+  async function ensureRemoteLoaded() {
+    try { await loadRemoteDeleted(); }
+    catch (error) { console.error('deleted-company remote load failed', error); }
+    return allDeleted();
   }
 
   function removeDeletedFromState() {
     if (typeof state === 'undefined' || !Array.isArray(state.leads)) return false;
-    const deleted = readDeleted();
+    const deleted = allDeleted();
     if (!deleted.size) return false;
     const removedIds = [];
     const next = state.leads.filter(lead => {
@@ -59,25 +111,50 @@
     return true;
   }
 
-  function deleteLead(id) {
+  async function deleteLead(id, button = null) {
     if (typeof state === 'undefined' || !Array.isArray(state.leads)) return;
     const lead = state.leads.find(item => item.id === id);
     if (!lead) return;
     const domain = leadDomain(lead);
     if (!domain) return;
 
-    const deleted = readDeleted();
-    deleted.add(domain);
-    writeDeleted(deleted);
+    const originalText = button?.textContent || '삭제';
+    if (button) {
+      button.disabled = true;
+      button.textContent = '삭제 중';
+    }
 
-    const removedIds = state.leads
-      .filter(item => leadDomain(item) === domain)
-      .map(item => item.id)
-      .filter(Boolean);
-    state.leads = state.leads.filter(item => leadDomain(item) !== domain);
-    for (const removedId of removedIds) state.selected?.delete?.(removedId);
-    if (typeof saveState === 'function') saveState();
-    if (typeof render === 'function') render();
+    try {
+      await requestJson(REMOTE_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyKey: domain,
+          companyName: clean(lead.company || domain, 120)
+        })
+      });
+
+      remoteDeleted.add(domain);
+      remoteLoaded = true;
+      const deleted = allDeleted();
+      deleted.add(domain);
+      writeLocalDeleted(deleted);
+
+      const removedIds = state.leads
+        .filter(item => leadDomain(item) === domain)
+        .map(item => item.id)
+        .filter(Boolean);
+      state.leads = state.leads.filter(item => leadDomain(item) !== domain);
+      for (const removedId of removedIds) state.selected?.delete?.(removedId);
+      if (typeof saveState === 'function') saveState();
+      if (typeof render === 'function') render();
+    } catch (error) {
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+      alert(`삭제 이력을 저장하지 못했습니다. 다시 시도해주세요.\n${clean(error?.message || '', 120)}`);
+    }
   }
 
   function decorateDeleteButtons(root = document) {
@@ -94,17 +171,15 @@
       button.className = 'reject-btn permanent-delete-btn';
       button.dataset.deleteLead = id;
       button.textContent = '삭제';
-      const reject = actions.querySelector('[data-reject]');
-      if (reject) reject.insertAdjacentElement('afterend', button);
-      else actions.appendChild(button);
+      actions.appendChild(button);
     }
   }
 
   if (typeof post === 'function') {
     const originalPost = post;
     post = async function postWithPermanentDeletes(url, payload, timeout) {
-      if (url !== '/api/hunt') return originalPost(url, payload, timeout);
-      const deleted = [...readDeleted()];
+      if (url !== '/api/hunt' && url !== '/api/bcww') return originalPost(url, payload, timeout);
+      const deleted = [...await ensureRemoteLoaded()];
       const excludeDomains = [...new Set([
         ...(Array.isArray(payload?.excludeDomains) ? payload.excludeDomains : []),
         ...deleted
@@ -122,24 +197,20 @@
     const button = event.target.closest?.('[data-delete-lead]');
     if (!button) return;
     event.preventDefault();
-    event.stopPropagation();
-    deleteLead(button.dataset.deleteLead || '');
+    event.stopImmediatePropagation();
+    deleteLead(button.dataset.deleteLead || '', button);
   }, true);
 
-  const initialize = () => {
+  const initialize = async () => {
+    await ensureRemoteLoaded();
     const changed = removeDeletedFromState();
     if (changed && typeof render === 'function') render();
     decorateDeleteButtons();
+
     const content = document.getElementById('content');
     if (!content) return;
-    new MutationObserver(records => {
-      for (const record of records) {
-        for (const node of record.addedNodes) {
-          if (node.nodeType === 1) decorateDeleteButtons(node);
-        }
-      }
-      decorateDeleteButtons(content);
-    }).observe(content, { childList: true, subtree: true });
+    new MutationObserver(() => decorateDeleteButtons(content))
+      .observe(content, { childList: true, subtree: true });
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initialize);
