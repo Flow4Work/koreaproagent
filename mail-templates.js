@@ -68,3 +68,11 @@ NYF는 티셔츠와 후디부터 스태프웨어까지 모든 제품을 서울�
 ${KPA_MAIL_SIGNATURE_KO}`
   }
 };
+
+(() => {
+  if (document.querySelector('script[data-bcww-mail-review]')) return;
+  const script = document.createElement('script');
+  script.src = '/bcww-mail-review.js?v=20260812-bcww-v1';
+  script.dataset.bcwwMailReview = '1';
+  document.head.appendChild(script);
+})();
