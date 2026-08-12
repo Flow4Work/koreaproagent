@@ -3,6 +3,7 @@
   if (!summary) return;
 
   function enhanceAutoSummary() {
+    if (typeof state !== 'undefined' && ['bcww','wsce','education_fair'].includes(state.currentCampaign)) return;
     const live = summary.querySelector('.hunt-live');
     if (!live) {
       summary.classList.remove('auto-live-summary');
@@ -67,6 +68,24 @@
     }
     attempts += 1;
     if (attempts < 120) setTimeout(load, 50);
+  };
+  load();
+})();
+
+(() => {
+  if (document.querySelector('script[data-campaign-run-controller]')) return;
+  let attempts = 0;
+  const load = () => {
+    if (document.querySelector('script[data-campaign-run-controller]')) return;
+    if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
+      const script = document.createElement('script');
+      script.src = '/campaign-run-controller.js?v=20260813-campaign-routing-v1';
+      script.dataset.campaignRunController = '1';
+      document.head.appendChild(script);
+      return;
+    }
+    attempts += 1;
+    if (attempts < 160) setTimeout(load, 50);
   };
   load();
 })();
