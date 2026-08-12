@@ -27,6 +27,18 @@ test('BCWW generic recruitment pages are not direct participant evidence', () =>
   }), false);
 });
 
+test('BCWW interest and follower directories are never participant evidence', () => {
+  assert.equal(bcwwRowEligible({
+    title: 'BCWW 2026 interested attendees',
+    content: 'Users who have shown interest for this event include Example Media.'
+  }), false);
+  assert.equal(bcwwRowRelevant({
+    title: 'BCWW 2026 visitors',
+    url: 'https://10times.com/broadcast-worldwide-seoul/visitors',
+    content: 'Followers and interested attendees.'
+  }), false);
+});
+
 test('BCWW 2025-only rows are rejected', () => {
   assert.equal(bcwwRowRelevant({
     title: 'BCWW 2025 exhibitors',
