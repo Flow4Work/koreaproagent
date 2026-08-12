@@ -73,7 +73,8 @@
       .filter(lead => lead?.campaign === 'bcww')
       .sort((a, b) =>
         Number(state.selected.has(b.id)) - Number(state.selected.has(a.id)) ||
-        Number(leadReady(b)) - Number(leadReady(a))
+        Number(leadReady(b)) - Number(leadReady(a)) ||
+        Number(b.sales_priority || b.score || 0) - Number(a.sales_priority || a.score || 0)
       );
   }
 
@@ -86,8 +87,14 @@
     const ready = leads.filter(leadReady).length;
     const selected = bcwwSelectedCount(leads);
     const auto = state.auto ? `<span class="hunt-live">자동사냥 ${remainingText()} 남음</span>` : '';
-    $('summary').innerHTML = `<strong>BCWW 후보 ${leads.length}개</strong><span>발송 가능 ${ready}개</span><span>선택 ${selected}개</span>${auto}${state.statusText ? `<span>${esc(state.statusText)}</span>` : ''}`;
+    $('summary').innerHTML = `<strong>BCWW 후보 ${leads.length}개</strong><span>발송 가능 ${ready}개</span><span>선택 ${selected}개</span><span>제외 ${state.rejected.size}개</span>${auto}${state.statusText ? `<span>${esc(state.statusText)}</span>` : ''}`;
   }
+
+  const originalRenderSummary = renderSummary;
+  renderSummary = function bcwwAwareSummary() {
+    if (state.currentCampaign === 'bcww') return bcwwSummary();
+    return originalRenderSummary();
+  };
 
   function bcwwStatus(lead = {}) {
     if (leadReady(lead)) return '발송 준비';
@@ -129,7 +136,7 @@
     bcwwSummary(leads);
 
     if (!leads.length) {
-      $('content').innerHTML = '<div class="empty"><strong>아직 확인된 BCWW 2026 해외 참가사가 없습니다.</strong><span>오늘 영업 준비를 누르면 2026년 직접 참가 증거가 있는 해외 회사만 찾습니다.</span></div>';
+      $('content').innerHTML = '<div class="empty"><strong>아직 확인된 BCWW 2026 해외 참가사가 없습니다.</strong><span>오늘 영업 준비를 누르면 전시·참가·쇼케이스·피칭·해외 대표단 증거까지 넓게 찾은 뒤 검증합니다.</span></div>';
       return;
     }
 
@@ -156,22 +163,33 @@
 
     state.cycle += 1;
     saveState();
-    state.statusText = 'BCWW 2026 해외 참가사 확인 중';
+    state.statusText = 'BCWW 2026 해외 참가사 넓게 탐색 중';
     render();
 
-    const excluded = [...state.leads.map(lead => lead.domain).filter(Boolean), ...state.rejected].slice(-500);
+    const excluded = [
+      ...state.leads.filter(lead => lead?.campaign === 'bcww').map(lead => lead.domain).filter(Boolean),
+      ...state.rejected
+    ].slice(-500);
     const result = await post('/api/bcww', {
       cycle: state.cycle,
       excludeDomains: excluded,
       tools: toolKeys()
-    }, 52000);
+    }, 110000);
 
     const added = mergeLeads(result.leads || []);
-    state.statusText = added.length ? `${added.length}개 직접 참가 확인 · 이메일 검증 중` : '새로 확인된 해외 참가사 없음';
+    const meta = result.meta || {};
+    if (added.length) {
+      state.statusText = `${added.length}개 참가사 확인 · 이메일 검증 중`;
+    } else {
+      const searched = Number(meta.searched_rows || 0);
+      const evidence = Number(meta.strong_evidence_rows || 0);
+      const resolved = Number(meta.resolved_foreign_candidates || 0) + Number(meta.direct_candidates || 0);
+      state.statusText = `신규 0개 · 검색 ${searched}건 · 참가증거 ${evidence}건 · 해외회사 ${resolved}건`;
+    }
     render();
 
-    if (added.length) await mapLimit(added.slice(0, 10), 3, enrichContact);
-    state.statusText = added.length ? `${added.length}개 처리 완료` : '';
+    if (added.length) await mapLimit(added.slice(0, 20), 4, enrichContact);
+    state.statusText = added.length ? `${added.length}개 처리 완료` : state.statusText;
     render();
     return added.length;
   };

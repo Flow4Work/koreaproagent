@@ -9,25 +9,81 @@ const EVENT = {
   venue: 'COEX Hall B, Seoul'
 };
 
-const SEARCH_QUERIES = [
-  '"BCWW 2026" "Stand #" Seoul company',
-  '"BCWW 2026" booth exhibitor Seoul company',
-  '"BCWW 2026" exhibitor "COEX" company',
-  '"BCWW 2026" showcase participant company',
-  '"BCWW 2026" "see you" Seoul media company',
-  '"BCWW 2026" "meet us" Seoul company'
+// publicWebSearchMany intentionally handles at most six queries per call.
+// Keep multiple batches so expanding the query set actually expands discovery.
+const SEARCH_BATCHES = [
+  [
+    '"BCWW 2026" exhibitor exhibiting booth stand',
+    '"BCWW 2026" attending joining participating "meet us"',
+    '"BCWW 2026" showcase pitch pitching screening',
+    '"BCWW 2026" delegation pavilion "country pavilion"',
+    '"BCWW 2026" seller buyer "business matching" company',
+    '"BCWW 2026" selected participant company team'
+  ],
+  [
+    '"BCWW 2026" Japan Japanese company',
+    '"BCWW 2026" Taiwan Taiwanese company',
+    '"BCWW 2026" Thailand Singapore company',
+    '"BCWW 2026" Philippines Indonesia Malaysia company',
+    '"BCWW 2026" France UK Europe company',
+    '"BCWW 2026" USA Canada Australia company'
+  ]
 ];
 
 const SOURCE_DOMAINS = new Set([
   'bcww.kr','coex.co.kr','coexcenter.com','linkedin.com','x.com','twitter.com',
   'facebook.com','instagram.com','youtube.com','bizinfo.go.kr','connectplt.kr',
-  'globalexhibition.org','kocca.kr','mcst.go.kr','crunchbase.com','imdb.com','variety.com','deadline.com','thetvdb.com'
+  'globalexhibition.org','kocca.kr','mcst.go.kr','crunchbase.com','imdb.com',
+  'variety.com','deadline.com','thetvdb.com','prtimes.jp','vipo.or.jp'
 ]);
 
 const BAD_DOMAIN_PARTS = /(news|press|blog|medium|wikipedia|eventbrite|meetup|directory|exhibition|conference)/i;
-const EXPLICIT_PARTICIPATION = /(stand\s*#|booth\s*(?:no\.?|#)?|exhibitor|exhibiting|showcase\s+(?:participant|company)|participating\s+(?:in|at)|we(?:'re| are)\s+(?:at|joining|exhibiting)|meet\s+us\s+(?:at|in)|see\s+you\s+(?:at|in))/i;
-const BCWW_2026 = /\bBCWW\s*2026\b/i;
+const BCWW_2026 = /(?:\bBCWW\s*2026\b|Broadcast\s*World\s*Wide[^\n]{0,60}\b2026\b)/i;
+const BCWW_2025 = /\bBCWW\s*2025\b/i;
+const STRONG_PARTICIPATION = /(stand\s*(?:no\.?|#)?\s*[a-z0-9-]*|booth\s*(?:no\.?|#)?\s*[a-z0-9-]*|exhibitor|exhibiting|participat(?:e|es|ed|ing|ion)\s+(?:in|at)|attend(?:s|ed|ing)?\s+(?:BCWW|the\s+BCWW)|join(?:s|ed|ing)?\s+(?:BCWW|us\s+at\s+BCWW)|we(?:'re| are| will be)\s+(?:at|joining|attending|exhibiting)|meet\s+us\s+(?:at|in)|see\s+you\s+(?:at|in)|showcase(?:\s+(?:participant|company|at\s+BCWW))?|pitch(?:es|ed|ing)?\s+(?:at|during|for)\s+BCWW|screen(?:s|ed|ing)?\s+(?:at|during)\s+BCWW|selected\s+(?:for|to\s+join|to\s+participate\s+in)\s+(?:the\s+)?BCWW|delegation\s+(?:to|at)\s+BCWW|pavilion\s+(?:at|for)\s+BCWW)/i;
+const RECRUITMENT_ONLY = /(registration\s+(?:is\s+)?(?:now\s+)?open|register\s+(?:now|here)|applications?\s+(?:are\s+)?open|apply\s+(?:now|here|by)|application\s+deadline|call\s+for\s+(?:exhibitors?|applications?|entries)|recruit(?:ing|ment)|모집(?:공고)?|공모|신청(?:기간|방법)?|접수(?:기간)?)/i;
+const CONFIRMED_LANGUAGE = /(we(?:'re| are| will be)|our\s+(?:team|company)|selected|confirmed|official\s+delegation|will\s+(?:attend|join|exhibit|showcase|pitch)|participating|exhibiting|attending|joining)/i;
 const KOREA_ENTITY = /(?:\bKorea\b|코리아|한국(?:지사|법인|오피스|사무소)?)/i;
+
+const COUNTRY_PATTERNS = [
+  ['Japan', /\bJapan(?:ese)?\b|日本/i],
+  ['Taiwan', /\bTaiwan(?:ese)?\b|臺灣|台湾/i],
+  ['Thailand', /\bThailand|Thai\b/i],
+  ['Singapore', /\bSingapore(?:an)?\b/i],
+  ['Philippines', /\bPhilippines|Filipino\b/i],
+  ['Indonesia', /\bIndonesia(?:n)?\b/i],
+  ['Malaysia', /\bMalaysia(?:n)?\b/i],
+  ['Vietnam', /\bVietnam(?:ese)?\b/i],
+  ['Hong Kong', /\bHong\s*Kong\b/i],
+  ['China', /\bChina|Chinese\b/i],
+  ['India', /\bIndia(?:n)?\b/i],
+  ['Australia', /\bAustralia(?:n)?\b/i],
+  ['New Zealand', /\bNew\s+Zealand\b/i],
+  ['United States', /\bUnited\s+States\b|\bU\.S\.A?\.?\b|\bUSA\b|\bAmerican\b/i],
+  ['Canada', /\bCanada|Canadian\b/i],
+  ['United Kingdom', /\bUnited\s+Kingdom\b|\bUK\b|\bBritish\b/i],
+  ['France', /\bFrance|French\b/i],
+  ['Germany', /\bGermany|German\b/i],
+  ['Spain', /\bSpain|Spanish\b/i],
+  ['Italy', /\bItaly|Italian\b/i],
+  ['Netherlands', /\bNetherlands|Dutch\b/i],
+  ['Sweden', /\bSweden|Swedish\b/i],
+  ['Norway', /\bNorway|Norwegian\b/i],
+  ['Denmark', /\bDenmark|Danish\b/i],
+  ['Finland', /\bFinland|Finnish\b/i],
+  ['Brazil', /\bBrazil|Brazilian\b/i],
+  ['Mexico', /\bMexico|Mexican\b/i],
+  ['United Arab Emirates', /\bUnited\s+Arab\s+Emirates\b|\bUAE\b/i]
+];
+
+const CCTLD_COUNTRY = new Map([
+  ['jp','Japan'],['tw','Taiwan'],['th','Thailand'],['sg','Singapore'],['ph','Philippines'],
+  ['id','Indonesia'],['my','Malaysia'],['vn','Vietnam'],['hk','Hong Kong'],['cn','China'],
+  ['in','India'],['au','Australia'],['nz','New Zealand'],['us','United States'],['ca','Canada'],
+  ['uk','United Kingdom'],['fr','France'],['de','Germany'],['es','Spain'],['it','Italy'],
+  ['nl','Netherlands'],['se','Sweden'],['no','Norway'],['dk','Denmark'],['fi','Finland'],
+  ['br','Brazil'],['mx','Mexico'],['ae','United Arab Emirates']
+]);
 
 const clean = (value = '', max = 500) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
 
@@ -44,16 +100,38 @@ function rootHost(value = '') {
   return parts.slice(-depth).join('.');
 }
 
+function currentBcwwContext(text = '') {
+  const value = clean(text, 6000);
+  if (!BCWW_2026.test(value)) return false;
+  if (BCWW_2025.test(value) && !/\b2026\b/.test(value)) return false;
+  return true;
+}
+
 function directParticipation(text = '') {
-  const value = clean(text, 5000);
-  return BCWW_2026.test(value) && EXPLICIT_PARTICIPATION.test(value);
+  const value = clean(text, 6000);
+  if (!currentBcwwContext(value) || !STRONG_PARTICIPATION.test(value)) return false;
+  if (RECRUITMENT_ONLY.test(value) && !CONFIRMED_LANGUAGE.test(value)) return false;
+  return true;
+}
+
+function inferCountry(text = '', domain = '') {
+  const value = clean(text, 6000);
+  for (const [country, pattern] of COUNTRY_PATTERNS) {
+    if (pattern.test(value)) return country;
+  }
+  const tld = rootHost(domain).split('.').pop() || '';
+  return CCTLD_COUNTRY.get(tld) || '';
+}
+
+function isKoreanCountry(country = '') {
+  return /^(?:south\s+)?korea$|republic\s+of\s+korea|대한민국|한국/i.test(clean(country, 100));
 }
 
 function obviouslyKorean(company = '', domain = '', text = '') {
   const host = rootHost(domain);
   if (host.endsWith('.kr')) return true;
   if (KOREA_ENTITY.test(company)) return true;
-  return /(?:Korea office|Korean office|한국지사|한국법인|서울지사)/i.test(clean(text, 4000));
+  return /(?:Korea office|Korean office|Korea branch|한국지사|한국법인|서울지사)/i.test(clean(text, 4000));
 }
 
 function sourceLike(domain = '') {
@@ -71,7 +149,7 @@ function companyTokens(value = '') {
 function titleMatchesCompany(company = '', row = {}) {
   const tokens = companyTokens(company);
   if (!tokens.length) return false;
-  const text = `${row?.title || ''} ${row?.content || ''}`.toLowerCase();
+  const text = `${row?.title || ''} ${row?.content || ''} ${row?.url || ''}`.toLowerCase();
   const hits = tokens.filter(token => text.includes(token)).length;
   return hits >= Math.min(2, tokens.length);
 }
@@ -86,12 +164,6 @@ function displayCompanyFromTitle(title = '', domain = '') {
   return value;
 }
 
-function foreignCcTld(domain = '') {
-  const host = rootHost(domain);
-  const tld = host.split('.').pop() || '';
-  return /^[a-z]{2}$/.test(tld) && tld !== 'kr';
-}
-
 function historySecret() {
   return clean(process.env.GMAIL_SESSION_SECRET, 5000);
 }
@@ -100,55 +172,67 @@ async function safeHistoryDomains() {
   const secret = historySecret();
   if (!secret) return { sent: [], deleted: [] };
   const [sent, deleted] = await Promise.all([
-    listSentCompanyDomains(secret, 250).catch(() => []),
+    listSentCompanyDomains(secret, 400).catch(() => []),
     listDeletedCompanyDomains(secret, 2000).catch(() => [])
   ]);
   return { sent, deleted };
 }
 
-function rawRows(search = {}) {
-  return (Array.isArray(search?.results) ? search.results : [])
-    .map((row, index) => ({
-      id: `r${index}`,
-      title: clean(row?.title, 260),
-      url: clean(row?.url, 500),
-      content: clean(row?.content || row?.snippet || row?.description, 1800),
-      published_date: clean(row?.published_date, 80),
-      engine: clean(row?._engine, 40) || 'web'
-    }))
-    .filter(row => /^https?:\/\//i.test(row.url))
-    .filter(row => directParticipation(`${row.title} ${row.content}`));
+function rawRows(searches = []) {
+  const seen = new Set();
+  const rows = [];
+  for (const search of searches) {
+    for (const row of Array.isArray(search?.results) ? search.results : []) {
+      const normalized = {
+        id: '',
+        title: clean(row?.title, 260),
+        url: clean(row?.url, 500),
+        content: clean(row?.content || row?.snippet || row?.description, 1600),
+        published_date: clean(row?.published_date, 80),
+        engine: clean(row?._engine || row?.source, 60) || 'web'
+      };
+      if (!/^https?:\/\//i.test(normalized.url)) continue;
+      if (!currentBcwwContext(`${normalized.title} ${normalized.content}`)) continue;
+      const key = `${rootHost(normalized.url)}|${normalized.url.replace(/\/$/, '')}`;
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      rows.push(normalized);
+    }
+  }
+  rows.sort((a, b) => Number(directParticipation(`${b.title} ${b.content}`)) - Number(directParticipation(`${a.title} ${a.content}`)));
+  return rows.slice(0, 72).map((row, index) => ({ ...row, id: `r${index}` }));
 }
 
-async function aiExtract(rows = []) {
+async function aiExtractChunk(rows = []) {
   if (!rows.length || !aiConfigured()) return [];
-  const prompt = `Identify CURRENT foreign companies that are directly participating in BCWW 2026 in Seoul.
+  const prompt = `Find NAMED non-Korean organizations that are already confirmed to take part in BCWW 2026 in Seoul.
 
-The goal is high precision, not volume. A company may be returned only when the supplied row itself clearly says the organization will take part in BCWW 2026 as an exhibitor, booth/stand operator, showcase participant, or an organization explicitly saying "meet us/see you at BCWW 2026".
+We want useful sales leads without inventing participation. Accept these evidence types when the supplied row actually ties the named organization/team to BCWW 2026:
+- exhibitor, booth or stand
+- explicit attendance / joining / participating
+- showcase, screening or pitch at BCWW 2026
+- selected program participant
+- official overseas delegation or pavilion member
+- named seller/buyer only when the row says that organization is already registered/selected for BCWW 2026
 
-STRICT EXCLUSIONS:
-- Do not return companies merely mentioned as past BCWW 2025 participants.
-- Do not return a person/company just because they liked, reposted, commented on, or were shown next to a generic BCWW registration announcement.
-- Do not treat conference speakers, buyers, organizers, press articles, directories, or generic event pages as exhibitors.
-- Do not return Korean companies or a Korean subsidiary/office.
-- foreign=true only when the row gives a concrete non-Korean country/location/entity signal. If origin is uncertain, omit it.
-- Never invent a website/domain.
+REJECT:
+- generic registration, recruitment, application, deadline or event-information pages with no named confirmed participant
+- BCWW 2025-only evidence
+- organizers, agencies or media merely describing BCWW unless they themselves are a confirmed participant
+- speaker-only mentions unless the organization itself is also stated to participate
+- Korean companies, Korean subsidiaries/offices
+- likes/reposts/comments around event promotion
 
+Country is optional. Include it only when the row itself supports it. Never invent a company, country, website or domain.
 Return JSON only:
-{"items":[{"row_id":"r0","company":"official organization name","country":"country supported by row","participation":"booth|stand|exhibitor|showcase|explicit attendance","confidence":95}]}
-
-Only include confidence >= 90.
+{"items":[{"row_id":"r0","company":"official organization name","country":"Japan or empty","participation":"booth|exhibitor|attendance|showcase|pitch|delegation|seller|buyer","confidence":90}]}
+Only return confidence >= 84.
 
 ROWS:
-${JSON.stringify(rows.map(row => ({
-    row_id: row.id,
-    title: row.title,
-    url: row.url,
-    text: row.content
-  })))}`;
+${JSON.stringify(rows.map(row => ({ row_id: row.id, title: row.title, url: row.url, text: row.content })))}`;
 
   try {
-    const result = await chatJson({ prompt, maxTokens: 1800, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 42000 });
+    const result = await chatJson({ prompt, maxTokens: 2200, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 42000 });
     const items = Array.isArray(result?.data?.items) ? result.data.items : [];
     return items.map(item => ({
       row_id: clean(item?.row_id, 20),
@@ -156,16 +240,24 @@ ${JSON.stringify(rows.map(row => ({
       country: clean(item?.country, 80),
       participation: clean(item?.participation, 80),
       confidence: Number(item?.confidence) || 0
-    })).filter(item => item.row_id && item.company && item.country && item.confidence >= 90);
+    })).filter(item => item.row_id && item.company && item.confidence >= 84);
   } catch {
     return [];
   }
 }
 
+async function aiExtract(rows = []) {
+  if (!rows.length || !aiConfigured()) return [];
+  const chunks = [];
+  for (let i = 0; i < Math.min(rows.length, 54); i += 18) chunks.push(rows.slice(i, i + 18));
+  const settled = await Promise.all(chunks.map(chunk => aiExtractChunk(chunk)));
+  return settled.flat();
+}
+
 async function resolveOfficialDomain(company = '', country = '', excludes = new Set()) {
-  const query = `"${clean(company, 140)}" official website ${clean(country, 80)}`;
+  const suffix = country ? ` ${clean(country, 80)}` : '';
   let result;
-  try { result = await tavilySearch(query, { maxResults: 7, topic: 'general' }); }
+  try { result = await tavilySearch(`"${clean(company, 140)}" official website${suffix}`, { maxResults: 8, topic: 'general' }); }
   catch { return null; }
   const rows = Array.isArray(result?.results) ? result.results : [];
   for (const row of rows) {
@@ -173,40 +265,111 @@ async function resolveOfficialDomain(company = '', country = '', excludes = new 
     if (!domain || sourceLike(domain) || excludes.has(normalizeCompanyKey(domain))) continue;
     if (obviouslyKorean(company, domain, `${row?.title || ''} ${row?.content || ''}`)) continue;
     if (!titleMatchesCompany(company, row)) continue;
-    return { domain, url: `https://${domain}/` };
+    return {
+      domain,
+      url: `https://${domain}/`,
+      country_hint: inferCountry(`${row?.title || ''} ${row?.content || ''}`, domain)
+    };
   }
   return null;
 }
 
+async function resolveForeignCountry(company = '', domain = '', sourceText = '', initialCountry = '') {
+  const direct = clean(initialCountry, 80) || inferCountry(sourceText, domain);
+  if (direct) return isKoreanCountry(direct) ? '' : direct;
+  let result;
+  try { result = await tavilySearch(`"${clean(company, 140)}" headquarters country`, { maxResults: 6, topic: 'general' }); }
+  catch { return ''; }
+  for (const row of Array.isArray(result?.results) ? result.results : []) {
+    const text = `${row?.title || ''} ${row?.content || ''}`;
+    const country = inferCountry(text, row?.url || domain);
+    if (country && !isKoreanCountry(country)) return country;
+    if (isKoreanCountry(country)) return '';
+  }
+  return '';
+}
+
+async function mapLimit(items = [], limit = 4, worker) {
+  const out = new Array(items.length);
+  let cursor = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try { out[index] = await worker(items[index], index); }
+      catch { out[index] = null; }
+    }
+  });
+  await Promise.all(runners);
+  return out;
+}
+
 async function directCandidates(rows = [], excludes = new Set()) {
-  const out = [];
-  for (const row of rows) {
+  const eligible = rows.filter(row => directParticipation(`${row.title} ${row.content}`));
+  const candidates = [];
+  for (const row of eligible) {
     const domain = rootHost(row.url);
     if (!domain || sourceLike(domain) || excludes.has(normalizeCompanyKey(domain))) continue;
     const company = displayCompanyFromTitle(row.title, domain);
     const text = `${row.title} ${row.content}`;
     if (obviouslyKorean(company, domain, text)) continue;
-    if (!foreignCcTld(domain)) continue;
-    out.push({
+    candidates.push({
       company,
-      country: '',
+      country: inferCountry(text, domain),
       participation: 'explicit attendance',
-      confidence: 92,
+      confidence: 93,
       domain,
       url: `https://${domain}/`,
       source: row
     });
   }
-  return out;
+  return candidates;
+}
+
+async function resolveExtractedCandidates(items = [], rows = [], excludes = new Set()) {
+  const rowById = new Map(rows.map(row => [row.id, row]));
+  const unique = [];
+  const seen = new Set();
+  for (const item of items.sort((a, b) => b.confidence - a.confidence)) {
+    const source = rowById.get(item.row_id);
+    if (!source) continue;
+    const key = `${item.company.toLowerCase()}|${item.row_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push({ item, source });
+    if (unique.length >= 18) break;
+  }
+
+  const resolved = await mapLimit(unique, 4, async ({ item, source }) => {
+    const sourceText = `${source.title} ${source.content}`;
+    if (obviouslyKorean(item.company, '', sourceText) || isKoreanCountry(item.country)) return null;
+    const official = await resolveOfficialDomain(item.company, item.country, excludes);
+    if (!official) return null;
+    const country = await resolveForeignCountry(
+      item.company,
+      official.domain,
+      sourceText,
+      item.country || official.country_hint
+    );
+    if (!country) return null;
+    return { ...item, ...official, country, source };
+  });
+  return resolved.filter(Boolean);
+}
+
+async function verifyDirectCandidates(items = []) {
+  return (await mapLimit(items.slice(0, 14), 4, async item => {
+    const text = `${item.source?.title || ''} ${item.source?.content || ''}`;
+    const country = await resolveForeignCountry(item.company, item.domain, text, item.country);
+    return country ? { ...item, country } : null;
+  })).filter(Boolean);
 }
 
 function leadFrom(candidate) {
   const company = clean(candidate.company, 140);
   const domain = rootHost(candidate.domain);
   const source = candidate.source || {};
-  const trigger = candidate.participation === 'stand' || candidate.participation === 'booth'
-    ? `${company} is confirmed with a ${candidate.participation} at BCWW 2026`
-    : `${company} is confirmed to participate in BCWW 2026`;
+  const participation = clean(candidate.participation, 80) || 'participation';
+  const trigger = `${company} is confirmed for BCWW 2026 (${participation})`;
 
   return {
     id: `bcww:${domain}`,
@@ -219,8 +382,8 @@ function leadFrom(candidate) {
     source_title: clean(source.title, 260),
     published_date: clean(source.published_date, 80),
     signal: trigger,
-    score: 90,
-    sales_priority: Number(candidate.confidence) || 90,
+    score: Math.max(84, Math.min(99, Number(candidate.confidence) || 88)),
+    sales_priority: Math.max(84, Math.min(99, Number(candidate.confidence) || 88)),
     verified_company: true,
     bcww_confirmed: true,
     team_origin: 'foreign',
@@ -236,9 +399,12 @@ function leadFrom(candidate) {
   };
 }
 
+export function bcwwRowRelevant(row = {}) {
+  return currentBcwwContext(`${row?.title || ''} ${row?.content || ''}`);
+}
+
 export function bcwwRowEligible(row = {}) {
-  const text = `${row?.title || ''} ${row?.content || ''}`;
-  return directParticipation(text);
+  return directParticipation(`${row?.title || ''} ${row?.content || ''}`);
 }
 
 export async function POST(request) {
@@ -253,26 +419,22 @@ export async function POST(request) {
   const excludes = new Set([...existing, ...history.sent, ...history.deleted].map(normalizeCompanyKey).filter(Boolean));
 
   try {
-    const search = await tavilySearchMany(SEARCH_QUERIES, {
-      maxResults: 12,
+    const searches = await Promise.all(SEARCH_BATCHES.map(batch => tavilySearchMany(batch, {
+      maxResults: 14,
       timeRange: 'year',
       topic: 'general'
-    });
-    const rows = rawRows(search);
+    })));
+    const rows = rawRows(searches);
+    const strongRows = rows.filter(row => directParticipation(`${row.title} ${row.content}`));
 
-    const direct = await directCandidates(rows, excludes);
-    const extracted = await aiExtract(rows);
-    const rowById = new Map(rows.map(row => [row.id, row]));
-    const resolved = [];
-
-    for (const item of extracted.slice(0, 8)) {
-      const source = rowById.get(item.row_id);
-      if (!source) continue;
-      if (obviouslyKorean(item.company, '', `${source.title} ${source.content}`)) continue;
-      const official = await resolveOfficialDomain(item.company, item.country, excludes);
-      if (!official) continue;
-      resolved.push({ ...item, ...official, source });
-    }
+    const [directRaw, extracted] = await Promise.all([
+      directCandidates(rows, excludes),
+      aiExtract(rows)
+    ]);
+    const [direct, resolved] = await Promise.all([
+      verifyDirectCandidates(directRaw),
+      resolveExtractedCandidates(extracted, rows, excludes)
+    ]);
 
     const combined = [...direct, ...resolved];
     const seen = new Set();
@@ -280,10 +442,11 @@ export async function POST(request) {
     for (const candidate of combined.sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))) {
       const domain = normalizeCompanyKey(candidate.domain);
       if (!domain || seen.has(domain) || excludes.has(domain)) continue;
+      if (!candidate.country || isKoreanCountry(candidate.country)) continue;
       if (obviouslyKorean(candidate.company, domain, `${candidate.source?.title || ''} ${candidate.source?.content || ''}`)) continue;
       seen.add(domain);
       provisional.push(leadFrom(candidate));
-      if (provisional.length >= 10) break;
+      if (provisional.length >= 20) break;
     }
 
     const secret = historySecret();
@@ -305,11 +468,18 @@ export async function POST(request) {
         event: EVENT,
         returned: leads.length,
         searched_rows: rows.length,
+        strong_evidence_rows: strongRows.length,
+        direct_candidates: direct.length,
+        ai_extracted: extracted.length,
+        resolved_foreign_candidates: resolved.length,
         sent_preexcluded: history.sent.length,
         sent_exact_suppressed: provisional.length - leads.length,
         deleted_preexcluded: history.deleted.length,
-        participation_gate: 'BCWW 2026 + direct exhibitor/booth/showcase/explicit attendance only',
-        team_origin_gate: 'foreign only; uncertain or Korea entity rejected',
+        search_batches: SEARCH_BATCHES.length,
+        search_queries: SEARCH_BATCHES.reduce((sum, batch) => sum + batch.length, 0),
+        participation_gate: 'BCWW 2026 confirmed exhibitor/attendance/showcase/pitch/delegation/registered seller-buyer evidence',
+        recruitment_only_rejected: true,
+        team_origin_gate: 'foreign only; Korea and unresolved origin rejected',
         historical_participants_allowed: false,
         email_gate: 'frontend exposes only same-domain qualified + valid contacts'
       }
