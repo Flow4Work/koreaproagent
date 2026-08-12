@@ -44,3 +44,11 @@
   observer.observe(summary, { childList: true, subtree: true, characterData: true });
   enhanceAutoSummary();
 })();
+
+(() => {
+  if (document.querySelector('script[data-bcww-mode]')) return;
+  const script = document.createElement('script');
+  script.src = '/bcww-mode.js?v=20260812-bcww-v1';
+  script.dataset.bcwwMode = '1';
+  document.head.appendChild(script);
+})();
