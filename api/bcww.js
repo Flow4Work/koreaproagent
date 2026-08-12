@@ -1,6 +1,6 @@
 import { tavilyConfigured, tavilySearch, tavilySearchMany } from '../lib/web-search.js';
 import { aiConfigured, chatJson } from '../lib/ai-provider.js';
-import { listSentCompanyDomains, normalizeCompanyKey } from '../lib/sent-companies.js';
+import { listSentCompanyDomains, matchSentCompanies, normalizeCompanyKey } from '../lib/sent-companies.js';
 import { listDeletedCompanyDomains } from '../lib/deleted-companies.js';
 
 const EVENT = {
@@ -46,9 +46,7 @@ function rootHost(value = '') {
 
 function directParticipation(text = '') {
   const value = clean(text, 5000);
-  if (!BCWW_2026.test(value) || !EXPLICIT_PARTICIPATION.test(value)) return false;
-  if (/\bBCWW\s*2025\b/i.test(value) && !BCWW_2026.test(value)) return false;
-  return true;
+  return BCWW_2026.test(value) && EXPLICIT_PARTICIPATION.test(value);
 }
 
 function obviouslyKorean(company = '', domain = '', text = '') {
@@ -94,8 +92,12 @@ function foreignCcTld(domain = '') {
   return /^[a-z]{2}$/.test(tld) && tld !== 'kr';
 }
 
+function historySecret() {
+  return clean(process.env.GMAIL_SESSION_SECRET, 5000);
+}
+
 async function safeHistoryDomains() {
-  const secret = clean(process.env.GMAIL_SESSION_SECRET, 5000);
+  const secret = historySecret();
   if (!secret) return { sent: [], deleted: [] };
   const [sent, deleted] = await Promise.all([
     listSentCompanyDomains(secret, 250).catch(() => []),
@@ -274,15 +276,26 @@ export async function POST(request) {
 
     const combined = [...direct, ...resolved];
     const seen = new Set();
-    const leads = [];
+    const provisional = [];
     for (const candidate of combined.sort((a, b) => Number(b.confidence || 0) - Number(a.confidence || 0))) {
       const domain = normalizeCompanyKey(candidate.domain);
       if (!domain || seen.has(domain) || excludes.has(domain)) continue;
       if (obviouslyKorean(candidate.company, domain, `${candidate.source?.title || ''} ${candidate.source?.content || ''}`)) continue;
       seen.add(domain);
-      leads.push(leadFrom(candidate));
-      if (leads.length >= 10) break;
+      provisional.push(leadFrom(candidate));
+      if (provisional.length >= 10) break;
     }
+
+    const secret = historySecret();
+    let sentIds = new Set();
+    if (secret && provisional.length) {
+      const matched = await matchSentCompanies(
+        provisional.map(lead => ({ id: lead.id, key: lead.domain })),
+        secret
+      ).catch(() => []);
+      sentIds = new Set(matched);
+    }
+    const leads = provisional.filter(lead => !sentIds.has(lead.id));
 
     return Response.json({
       campaign: 'bcww',
@@ -293,6 +306,7 @@ export async function POST(request) {
         returned: leads.length,
         searched_rows: rows.length,
         sent_preexcluded: history.sent.length,
+        sent_exact_suppressed: provisional.length - leads.length,
         deleted_preexcluded: history.deleted.length,
         participation_gate: 'BCWW 2026 + direct exhibitor/booth/showcase/explicit attendance only',
         team_origin_gate: 'foreign only; uncertain or Korea entity rejected',
