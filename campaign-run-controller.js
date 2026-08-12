@@ -49,10 +49,10 @@
     const summary=document.getElementById('summary'), live=summary?.querySelector('.hunt-live'); if(!summary)return;
     if(!live){summary.querySelector('.hunt-found')?.remove();return;}
     const time=live.textContent.match(/(\d+:\d{2})/)?.[1] || (typeof remainingText==='function'?remainingText():'00:00');
-    live.textContent=`${SPECIAL[id].short} 자동사냥 종료까지 ${time} 남음`;
+    const liveText=`${SPECIAL[id].short} 자동사냥 종료까지 ${time} 남음`; if(live.textContent!==liveText) live.textContent=liveText;
     let found=summary.querySelector('.hunt-found'); if(!found){found=document.createElement('strong');found.className='hunt-found';live.after(found);}
     const base=state.__campaignAutoBaseline?.id===id?Number(state.__campaignAutoBaseline.count)||0:count(id);
-    found.textContent=`+ ${Math.max(0,count(id)-base)}개 찾음`;
+    const foundText=`+ ${Math.max(0,count(id)-base)}개 찾음`; if(found.textContent!==foundText) found.textContent=foundText;
   }
   const renderMeta=id=>{if(window.__kpaCampaignMeta[id]){state.statusText=status(id);render();}};
   const wait=()=>new Promise(resolve=>{const ms=4500+Math.random()*4500,at=Date.now(),t=setInterval(()=>{if(!state.auto||Date.now()-at>=ms){clearInterval(t);resolve();}},250);});
