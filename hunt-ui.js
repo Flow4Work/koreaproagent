@@ -49,8 +49,15 @@
 (() => {
   if (document.querySelector('script[data-bcww-mode]')) return;
   const script = document.createElement('script');
-  script.src = '/bcww-mode-v2.js?v=20260813-bcww-hybrid-email-v2';
+  script.src = '/bcww-mode-v2.js?v=20260813-bcww-sales-v4';
   script.dataset.bcwwMode = '1';
+  script.addEventListener('load', () => {
+    if (document.querySelector('script[data-bcww-sales-ui]')) return;
+    const sales = document.createElement('script');
+    sales.src = '/bcww-sales-ui-v4.js?v=20260813-bcww-sales-v4';
+    sales.dataset.bcwwSalesUi = '1';
+    document.head.appendChild(sales);
+  }, { once:true });
   document.head.appendChild(script);
 })();
 
