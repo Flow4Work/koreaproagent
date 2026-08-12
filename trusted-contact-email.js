@@ -32,7 +32,7 @@
   const loadFresh20_20260812 = () => {
     if (document.querySelector('script[data-kbw-fresh20-20260812]')) return;
     const script = document.createElement('script');
-    script.src = '/kbw-fresh-20-20260812.js?v=20260812-kbw-fresh20-v1';
+    script.src = '/kbw-fresh-20-20260812.js?v=20260812-kbw-fresh20-v2';
     script.dataset.kbwFresh20260812 = '1';
     document.head.appendChild(script);
   };
