@@ -2,7 +2,10 @@ $ErrorActionPreference = "Stop"
 
 $ExpectedRepo = "Flow4Work/koreaproagent"
 $ExpectedProject = "koreaproagent"
-$ExpectedScope = "daijobu1"
+$ScopeArgs = @()
+if ($env:VERCEL_SCOPE) {
+  $ScopeArgs = @('--scope', $env:VERCEL_SCOPE)
+}
 
 Write-Host "=== Korea Agent / Safe Vercel Production Deploy ===" -ForegroundColor Cyan
 
@@ -44,13 +47,19 @@ if ($localSha -ne $remoteSha) {
   throw "현재 main이 최신 origin/main과 다릅니다. local=$localSha remote=$remoteSha"
 }
 
-Write-Host "Vercel 계정/프로젝트 확인 중..." -ForegroundColor Cyan
-vercel whoami | Out-Null
-vercel project inspect $ExpectedProject --scope $ExpectedScope | Out-Null
+Write-Host "Vercel 계정/기존 프로젝트 확인 중..." -ForegroundColor Cyan
+$who = (vercel whoami).Trim()
+if (-not $who) {
+  throw "Vercel 로그인이 필요합니다. 먼저 vercel login을 실행하세요."
+}
 
-# 프로젝트가 실제로 존재하는지 확인한 뒤에만 링크한다.
-# --project와 --scope를 고정해 새 프로젝트가 실수로 생성되는 경로를 차단한다.
-vercel link --yes --project $ExpectedProject --scope $ExpectedScope | Out-Null
+# 먼저 기존 프로젝트가 현재 Vercel 계정/선택 scope에 실제로 존재하는지 검사한다.
+# 존재하지 않으면 여기서 중단하여 이름이 비슷한 새 프로젝트가 생성되는 것을 막는다.
+vercel project inspect $ExpectedProject @ScopeArgs | Out-Null
 
-Write-Host "Production 배포: $ExpectedScope/$ExpectedProject @ $localSha" -ForegroundColor Green
-vercel --prod --yes --project $ExpectedProject --scope $ExpectedScope
+# 검증된 기존 프로젝트에만 명시적으로 링크한다.
+vercel link --yes --project $ExpectedProject @ScopeArgs | Out-Null
+
+$scopeLabel = if ($env:VERCEL_SCOPE) { "$($env:VERCEL_SCOPE)/" } else { "" }
+Write-Host "Production 배포: $scopeLabel$ExpectedProject @ $localSha" -ForegroundColor Green
+vercel --prod --yes --project $ExpectedProject @ScopeArgs

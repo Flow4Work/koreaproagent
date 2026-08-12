@@ -6,8 +6,8 @@
   "scripts": {
     "dev": "vercel dev",
     "test": "node --test",
-    "deploy": "vercel --prod --yes --project koreaproagent --scope daijobu1",
-    "deploy:prod": "vercel --prod --yes --project koreaproagent --scope daijobu1"
+    "deploy": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1",
+    "deploy:prod": "powershell -ExecutionPolicy Bypass -File ./deploy.ps1"
   },
   "engines": {
     "node": "24.x"
