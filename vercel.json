@@ -5,7 +5,9 @@
   "rewrites": [
     {"source": "/api/email/status", "destination": "/api/gmail?action=status"},
     {"source": "/api/email/auth-start", "destination": "/api/gmail?action=auth"},
-    {"source": "/api/email/send", "destination": "/api/gmail"}
+    {"source": "/api/email/send", "destination": "/api/gmail"},
+    {"source": "/api/discover-clients", "destination": "/api/discover"},
+    {"source": "/api/discover-v2", "destination": "/api/discover"}
   ],
   "headers": [
     {
@@ -20,8 +22,6 @@
   "functions": {
     "api/analyze.js": {"maxDuration": 120},
     "api/discover.js": {"maxDuration": 120},
-    "api/discover-clients.js": {"maxDuration": 120},
-    "api/discover-v2.js": {"maxDuration": 120},
     "api/hunt.js": {"maxDuration": 45},
     "api/bcww.js": {"maxDuration": 120},
     "api/wsce.js": {"maxDuration": 120},
