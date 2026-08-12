@@ -53,14 +53,15 @@
     if (!current) return;
     const strict = strictBcwwContact(current);
     if (strict) {
-      if (current.contact?.email !== strict.email && typeof patchLead === 'function') {
-        patchLead(lead.id, { contact: strict, contact_status: 'found' });
+      if ((current.contact?.email !== strict.email || current.contacts?.length !== 1) && typeof patchLead === 'function') {
+        patchLead(lead.id, { contact: strict, contacts: [strict], contact_status: 'found' });
       }
       return;
     }
     if (typeof patchLead === 'function') {
       patchLead(lead.id, {
         contact: null,
+        contacts: [],
         contact_status: 'failed',
         contact_failure_reason: '검증된 이메일 미확보'
       });
@@ -174,6 +175,45 @@
     render();
     return added.length;
   };
+
+  function loadJson(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; }
+    catch { return fallback; }
+  }
+
+  function seedBcwwDrafts(ids = []) {
+    const draftKey = 'kpa.mail.review.drafts.v5';
+    const drafts = loadJson(draftKey, {});
+    let changed = false;
+    for (const id of [...new Set(ids.filter(Boolean))]) {
+      const lead = state.leads.find(item => item.id === id && item.campaign === 'bcww');
+      if (!lead || !leadReady(lead)) continue;
+      const contact = strictBcwwContact(lead);
+      if (!contact) continue;
+      drafts[id] = {
+        ...(drafts[id] || {}),
+        selectedEmails: [contact.email],
+        included: true,
+        templateId: 'B',
+        to: contact.email,
+        subject: lead.subject || `Quick question about ${lead.company} at BCWW 2026`,
+        body: lead.message_en || leadMessage(lead),
+        translation: lead.message_ko || ''
+      };
+      changed = true;
+    }
+    if (changed) localStorage.setItem(draftKey, JSON.stringify(drafts));
+  }
+
+  window.addEventListener('click', event => {
+    const mail = event.target.closest?.('a.mail-btn');
+    if (mail) {
+      const id = mail.closest('tr.data-row')?.querySelector('.lead-check')?.dataset?.id || '';
+      if (id) seedBcwwDrafts([id]);
+      return;
+    }
+    if (event.target.closest?.('#prepareSelectedBtn')) seedBcwwDrafts([...state.selected]);
+  }, true);
 
   function rebuildCampaignSelect() {
     const select = $('campaignSelect');
