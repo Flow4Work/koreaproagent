@@ -193,7 +193,7 @@
     };
   }
 
-  document.addEventListener('click', event => {
+  window.addEventListener('click', event => {
     const button = event.target.closest?.('[data-delete-lead]');
     if (!button) return;
     event.preventDefault();
