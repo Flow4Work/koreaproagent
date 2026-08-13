@@ -33,7 +33,7 @@
 
   // Old BCWW interest/follower fallbacks must never survive into the new mode.
   const keepIds = new Set((state.leads || []).filter(lead => lead?.campaign !== 'bcww' || lead?.bcww_participation_confirmed === true).map(lead => lead.id));
-  state.leads = (state.leads || []).filter(lead => lead?.campaign !== 'bcww' || lead?.bcww_participation_confirmed === true);
+  state.leads = (state.leads || []).filter(lead => lead?.campaign !== 'bcww' || lead?.bcww_sales_candidate === true || lead?.bcww_participation_confirmed === true || lead?.bcww_outreach_tier);
   state.selected = new Set([...state.selected].filter(id => keepIds.has(id)));
   if (typeof saveState === 'function') saveState();
 
@@ -76,7 +76,7 @@
   };
 
   function bcwwLeads() {
-    return (state.leads || []).filter(lead => lead?.campaign === 'bcww' && lead?.bcww_participation_confirmed === true)
+    return (state.leads || []).filter(lead => lead?.campaign === 'bcww' && (lead?.bcww_participation_confirmed === true || lead?.bcww_sales_candidate === true || lead?.bcww_outreach_tier))
       .sort((a,b) => Number(state.selected.has(b.id)) - Number(state.selected.has(a.id)) || Number(leadReady(b)) - Number(leadReady(a)) || Number(b.sales_priority || b.score || 0) - Number(a.sales_priority || a.score || 0));
   }
 
@@ -194,6 +194,22 @@
     if (event.target.closest?.('#prepareSelectedBtn')) seedDrafts([...state.selected]);
   }, true);
 
+  async function autoLoadBcwwSeeds() {
+    if (state.currentCampaign !== 'bcww') return;
+    var ex = (state.leads || []).filter(function(l){return l && l.campaign==='bcww';});
+    if (ex.length >= 20) return;
+    try {
+      var resp = await fetch('/api/bcww', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({seedsOnly:true}), cache:'no-store' });
+      var data = await resp.json();
+      if (Array.isArray(data.leads) && data.leads.length) {
+        var ids = new Set((state.leads||[]).map(function(l){return l.id;}));
+        var doms = new Set((state.leads||[]).map(function(l){return (l.domain||'').toLowerCase();}));
+        var fresh = data.leads.filter(function(l){return !ids.has(l.id) && !doms.has((l.domain||'').toLowerCase());});
+        if (fresh.length) { state.leads = fresh.concat(state.leads||[]).slice(0,250); if (typeof saveState==='function') saveState(); render(); }
+      }
+    } catch(e) {}
+  }
+
   function rebuildCampaignSelect() {
     const select = $('campaignSelect'); if (!select) return;
     const order = ['kbw','bcww',...Object.keys(CAMPAIGNS).filter(id => !['kbw','bcww'].includes(id))];
@@ -203,7 +219,8 @@
   rebuildCampaignSelect();
   const select = $('campaignSelect');
   if (select && select.dataset.bcwwHybridSelection !== '1') {
-    select.dataset.bcwwHybridSelection = '1'; select.addEventListener('change', () => { if (state.currentCampaign === 'bcww') restoreSelection(); else state.selected.clear(); saveState(); render(); });
+    select.dataset.bcwwHybridSelection = '1'; select.addEventListener('change', () => { if (state.currentCampaign === 'bcww') { restoreSelection(); autoLoadBcwwSeeds(); } else { state.selected.clear(); } saveState(); render(); });
   }
+  if (state.currentCampaign === 'bcww') autoLoadBcwwSeeds();
   render();
 })();
