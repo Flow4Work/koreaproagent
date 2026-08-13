@@ -33,7 +33,7 @@
   const baseLeadReady = leadReady;
   leadReady = function bcwwSalesLeadReady(lead = {}) {
     if (lead?.campaign !== 'bcww') return baseLeadReady(lead);
-    const allowedTier = lead?.bcww_participation_confirmed === true || ['channel','recurrence'].includes(lead?.bcww_outreach_tier);
+    const allowedTier = lead?.bcww_participation_confirmed === true || ['channel','recurrence','prospect'].includes(lead?.bcww_outreach_tier);
     return Boolean(lead?.verified_company === true && lead?.team_origin === 'foreign' && allowedTier && trusted(lead) && clean(leadMessage(lead), 12000).length >= 120);
   };
 
@@ -45,6 +45,7 @@
         Number(leadReady(b)) - Number(leadReady(a)) ||
         Number(b.bcww_participation_confirmed === true) - Number(a.bcww_participation_confirmed === true) ||
         Number(b.bcww_outreach_tier === 'channel') - Number(a.bcww_outreach_tier === 'channel') ||
+        Number(b.bcww_outreach_tier === 'recurrence') - Number(a.bcww_outreach_tier === 'recurrence') ||
         Number(b.sales_priority || b.score || 0) - Number(a.sales_priority || a.score || 0)
       );
   }
@@ -52,13 +53,15 @@
   function tier(lead = {}) {
     if (lead.bcww_participation_confirmed === true) return 'direct';
     if (lead.bcww_outreach_tier === 'channel') return 'channel';
-    return 'recurrence';
+    if (lead.bcww_outreach_tier === 'recurrence') return 'recurrence';
+    return 'prospect';
   }
   function tierLabel(lead = {}) {
     const t = tier(lead);
     if (t === 'direct') return '2026 참가 확인';
     if (t === 'channel') return '2026 공식 참가 채널';
-    return '2025 참가 · 2026 확인중';
+    if (t === 'recurrence') return '2025 참가 · 2026 확인중';
+    return '2026 접촉 후보 · 참가 미확정';
   }
   function status(lead = {}) {
     const t = trusted(lead);
@@ -95,11 +98,12 @@
     const direct = rows.filter(x => tier(x) === 'direct').length;
     const channel = rows.filter(x => tier(x) === 'channel').length;
     const recurrence = rows.filter(x => tier(x) === 'recurrence').length;
+    const prospect = rows.filter(x => tier(x) === 'prospect').length;
     const ready = rows.filter(leadReady).length;
     const auto = state.auto ? `<span class="hunt-live">BCWW 자동사냥 ${remainingText()} 남음</span>` : '';
     const text = bcwwOnlyStatusText();
     const el = document.getElementById('summary');
-    if (el) el.innerHTML = `<strong>BCWW 영업 후보 ${rows.length}개</strong><span>2026 직접 ${direct}</span><span>공식 채널 ${channel}</span><span>재참가 추적 ${recurrence}</span><span>이메일 확보 ${ready}</span><span>선택 ${selectedCount(rows)}</span>${auto}${text ? `<span>${esc(text)}</span>` : ''}`;
+    if (el) el.innerHTML = `<strong>BCWW 영업 후보 ${rows.length}개</strong><span>2026 직접 ${direct}</span><span>공식 채널 ${channel}</span><span>재참가 추적 ${recurrence}</span><span>접촉 후보 ${prospect}</span><span>이메일 확보 ${ready}</span><span>선택 ${selectedCount(rows)}</span>${auto}${text ? `<span>${esc(text)}</span>` : ''}`;
   };
 
   function bindRows() {
@@ -119,7 +123,7 @@
     const content = document.getElementById('content');
     if (!content) return;
     if (!rows.length) {
-      content.innerHTML = '<div class="empty"><strong>아직 BCWW 영업 후보가 없습니다.</strong><span>2026 직접 참가 확인 + 공식 해외 참가 채널 + 검증된 2025 재참가 후보를 함께 탐색합니다.</span></div>';
+      content.innerHTML = '<div class="empty"><strong>아직 BCWW 영업 후보가 없습니다.</strong><span>2026 직접 참가 확인 + 공식 해외 참가 채널 + 검증된 2025 재참가 후보 + 공식 공개 이메일이 있는 2026 접촉 후보를 함께 탐색합니다.</span></div>';
       return;
     }
     content.innerHTML = `<table class="lead-table bcww-table"><thead><tr><th></th><th>회사</th><th>담당자 / 이메일</th><th>상태</th><th>행동</th></tr></thead><tbody>${rows.map(lead => {
