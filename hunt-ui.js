@@ -48,16 +48,53 @@
 
 (() => {
   if (document.querySelector('script[data-bcww-mode]')) return;
-  const script = document.createElement('script');
-  script.src = '/bcww-mode-v2.js?v=20260813-bcww-sales-v4';
-  script.dataset.bcwwMode = '1';
-  script.addEventListener('load', () => {
-    if (document.querySelector('script[data-bcww-sales-ui]')) return;
+
+  const mergeStaticBcww = (incoming = []) => {
+    if (typeof state === 'undefined' || !Array.isArray(state.leads)) return;
+    const rejected = state.rejected || new Set();
+    const byDomain = new Map(state.leads.map(lead => [String(lead.domain || '').toLowerCase(), lead]));
+    for (const lead of incoming) {
+      if (lead?.campaign !== 'bcww') continue;
+      const domain = String(lead.domain || '').toLowerCase();
+      if (!domain || rejected.has(domain)) continue;
+      const current = byDomain.get(domain);
+      if (!current || (!current.contact?.email && lead.contact?.email)) byDomain.set(domain, current ? { ...current, ...lead } : lead);
+    }
+    state.leads = [...byDomain.values()].slice(-(typeof MAX_BUFFER === 'number' ? MAX_BUFFER : 250));
+    if (typeof saveState === 'function') saveState();
+    if (typeof render === 'function') render();
+  };
+
+  const loadStaticBcww = async () => {
+    if (window.__KPA_BCWW_STATIC_LOADING__ || typeof post !== 'function' || typeof state === 'undefined') return;
+    window.__KPA_BCWW_STATIC_LOADING__ = true;
+    try {
+      const excludeDomains = [...new Set([
+        ...(state.leads || []).filter(lead => lead?.campaign === 'bcww').map(lead => lead.domain).filter(Boolean),
+        ...(state.rejected || [])
+      ])].slice(-500);
+      const result = await post('/api/bcww', { staticOnly:true, excludeDomains }, 12000);
+      mergeStaticBcww(result?.leads || []);
+    } catch (error) {
+      console.error('BCWW static seed load failed', error);
+    } finally {
+      window.__KPA_BCWW_STATIC_LOADING__ = false;
+    }
+  };
+
+  const loadSalesUi = () => {
+    if (document.querySelector('script[data-bcww-sales-ui]')) { loadStaticBcww(); return; }
     const sales = document.createElement('script');
-    sales.src = '/bcww-sales-ui-v4.js?v=20260813-bcww-sales-v4';
+    sales.src = '/bcww-sales-ui-v4.js?v=20260814-bcww-static-init-v1';
     sales.dataset.bcwwSalesUi = '1';
+    sales.addEventListener('load', loadStaticBcww, { once:true });
     document.head.appendChild(sales);
-  }, { once:true });
+  };
+
+  const script = document.createElement('script');
+  script.src = '/bcww-mode-v2.js?v=20260814-bcww-static-init-v1';
+  script.dataset.bcwwMode = '1';
+  script.addEventListener('load', loadSalesUi, { once:true });
   document.head.appendChild(script);
 })();
 
