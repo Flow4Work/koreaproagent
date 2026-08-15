@@ -16,6 +16,7 @@ const AUTO_DURATION_MS = 15 * 60 * 1000;
 
 const CAMPAIGNS = {
   kbw: { label:'KBW 단체복', icon:'👕', market:'해외→한국', message:'auto' },
+  kbeauty: { label:'K-Beauty Expo 2026 단체복', icon:'💄', market:'해외→한국', message:'en' },
   apparel: { label:'국내 단체복', icon:'👕', market:'한국', message:'ko' },
   ax: { label:'AX PoC', icon:'🤖', market:'한국', message:'ko' },
   video: { label:'영상 제작', icon:'🎬', market:'한국', message:'ko' },
