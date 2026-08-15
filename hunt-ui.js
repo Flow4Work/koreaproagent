@@ -66,15 +66,15 @@
   let attempts = 0;
   const load = () => {
     if (document.querySelector('script[data-international-event-mode]')) return;
-    if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww) {
+    if (typeof CAMPAIGNS !== 'undefined') {
       const script = document.createElement('script');
-      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-zero-fix-v3';
+      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-fast-email-v4';
       script.dataset.internationalEventMode = '1';
       document.head.appendChild(script);
       return;
     }
     attempts += 1;
-    if (attempts < 120) setTimeout(load, 50);
+    if (attempts < 120) setTimeout(load, 10);
   };
   load();
 })();
