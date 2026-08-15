@@ -103,6 +103,76 @@
     );
   }
 
+  async function fastKBeautyContacts() {
+    const candidates = visibleEventLeads('kbeauty')
+      .filter(lead => !strictEventContact(lead) && lead.fast_contact_done !== true)
+      .slice(0, 60);
+    if (!candidates.length) return { checked:0, found:0, resolved:0 };
+
+    const tools = toolKeys();
+    for (const lead of candidates) {
+      const current = state.leads.find(item => item.id === lead.id);
+      if (current) current.contact_status = 'searching';
+    }
+    saveState(); render();
+
+    let response;
+    try {
+      response = await post('/api/find-contacts', {
+        action:'kbeauty_fast',
+        exaKey:tools.exaKey || '',
+        items:candidates.map(lead => ({
+          id:lead.id,
+          company:lead.company,
+          country:lead.team_origin_country || '',
+          domain:lead.domain || '',
+          url:lead.url || ''
+        }))
+      }, 65000);
+    } catch {
+      for (const lead of candidates) {
+        const current = state.leads.find(item => item.id === lead.id);
+        if (current) current.contact_status = current.domain ? 'pending' : 'website_pending';
+      }
+      saveState(); render();
+      return { checked:candidates.length, found:0, resolved:0 };
+    }
+
+    let found = 0, resolved = 0;
+    const rows = Array.isArray(response?.results) ? response.results : [];
+    const byId = new Map(rows.map(row => [row.id,row]));
+    for (const lead of candidates) {
+      const current = state.leads.find(item => item.id === lead.id);
+      if (!current) continue;
+      const row = byId.get(lead.id);
+      current.fast_contact_done = true;
+      if (!row) {
+        current.contact_status = current.domain ? 'failed' : 'website_pending';
+        continue;
+      }
+      if (row.domain && !current.domain) {
+        current.domain = row.domain;
+        current.url = row.url || `https://${row.domain}/`;
+        current.website_unresolved = false;
+        resolved += 1;
+      }
+      const contacts = Array.isArray(row.contacts) ? row.contacts : [];
+      if (contacts.length) {
+        current.contact = contacts[0];
+        current.contacts = contacts;
+        current.contact_provider = 'hunter';
+        current.contact_status = 'found';
+        current.contact_failure_reason = '';
+        found += 1;
+      } else {
+        current.contact_status = current.domain ? 'failed' : 'website_pending';
+        current.contact_failure_reason = current.domain ? 'Hunter 빠른 검색 미확보' : '공식 사이트 확인 중';
+      }
+    }
+    saveState(); render();
+    return { checked:candidates.length, found, resolved };
+  }
+
   function persistCurrentSelection() {
     if (!isEventCampaign(state.currentCampaign)) return;
     const ids = new Set(visibleEventLeads().map(lead => lead.id));
@@ -294,10 +364,19 @@
     }
     render();
 
-    const contactable = state.currentCampaign === 'kbeauty' ? added.filter(lead => lead.domain && safeLink(lead.url)) : added;
-    if (contactable.length) await mapLimit(contactable.slice(0, 28), 4, enrichContact);
-    if (state.currentCampaign === 'kbeauty') state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · 계속 탐색 중`;
-    else if (added.length) state.statusText = `${added.length}개 처리 완료`;
+    if (state.currentCampaign === 'kbeauty') {
+      state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · Exa로 사이트 확인 + Hunter 이메일 빠른 수집 중`;
+      render();
+      const fast = await fastKBeautyContacts();
+      const slowFallback = visibleEventLeads('kbeauty')
+        .filter(lead => lead.domain && safeLink(lead.url) && !strictEventContact(lead) && lead.contact_status === 'failed')
+        .slice(0, 10);
+      if (slowFallback.length) await mapLimit(slowFallback, 6, enrichContact);
+      state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · 빠른 이메일 ${fast.found}개 · 사이트 추가 확인 ${fast.resolved}개`;
+    } else {
+      if (added.length) await mapLimit(added.slice(0, 28), 4, enrichContact);
+      if (added.length) state.statusText = `${added.length}개 처리 완료`;
+    }
     render();
     return added.length;
   };
