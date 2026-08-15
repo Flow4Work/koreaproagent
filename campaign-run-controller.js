@@ -5,7 +5,7 @@
   const KBEAUTY_MIN = 20;
   const SPECIAL = {
     bcww:{ short:'BCWW', endpoint:'/api/bcww', copy:'BCWW 2026 전용 검색 · 실제 참가 근거 → 해외 회사 → valid 회사 이메일 순서로 검증합니다.' },
-    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo Korea 2026 · 2026 직접 신호 + 2025 실제 해외 참가사의 재참가 후보를 정확히 누적하고 회사 이메일을 찾습니다.' },
+    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo Korea 2026 · 실제 해외 후보를 유지하고 공식 사이트와 회사 이메일 확보를 우선합니다.' },
     wsce:{ short:'WSCE', endpoint:'/api/wsce', copy:'WSCE 2026 전용 검색 · 공식 참가사/직접 참가 증거 → 해외 본체 → valid 회사 이메일 순서로 검증합니다.' },
     education_fair:{ short:'Education Fair', endpoint:'/api/education-fair', copy:'International Education Fair 2026 전용 검색 · 실제 참가기관 → 해외 본체 → valid 이메일 순서로 검증합니다.' }
   };
@@ -13,7 +13,19 @@
   const key = (kind,id) => `kpa.hunt.${kind}.${id}.v2`;
   const get = (kind,id) => localStorage.getItem(key(kind,id)) === '1';
   const set = (kind,id,on) => on ? localStorage.setItem(key(kind,id),'1') : localStorage.removeItem(key(kind,id));
-  const count = id => (state.leads || []).filter(x => x?.campaign === id).length;
+  const clean = (value='') => String(value||'').replace(/\s+/g,' ').trim();
+  const validKBeauty = lead => lead?.campaign==='kbeauty' && clean(lead.company).length>=2 && !/^(?:marketing\s*\/\s*events?|공식\s*사이트\s*확인\s*중|unknown|n\/a|-+)$/i.test(clean(lead.company));
+  const count = id => id==='kbeauty' ? (state.leads||[]).filter(validKBeauty).length : (state.leads || []).filter(x => x?.campaign === id).length;
+  const kbeautyStats = () => {
+    const leads=(state.leads||[]).filter(validKBeauty);
+    return {
+      total:leads.length,
+      emails:leads.filter(lead=>Boolean(lead?.contact?.email || (Array.isArray(lead?.contacts)&&lead.contacts.some(c=>c?.email)))).length,
+      direct:leads.filter(lead=>lead.kbeauty_confirmed===true).length,
+      repeat:leads.filter(lead=>lead.kbeauty_repeat_prospect===true||lead.attendance_tier==='2025_repeat_prospect').length,
+      sites:leads.filter(lead=>clean(lead.domain)).length
+    };
+  };
   window.__kpaCampaignMeta ||= {};
 
   const basePost = post;
@@ -45,7 +57,10 @@
     const m=window.__kpaCampaignMeta[id]||{}, s=SPECIAL[id].short;
     if(id==='wsce') return `${s} 전용 ${Number(m.cycle)||1}회차 · 공식 상세 ${Number(m.official_detail_rows)||0}/${Number(m.official_detail_links_total)||Number(m.official_detail_rows)||0} (${Number(m.official_detail_batch_slot)||1}/${Number(m.official_detail_batch_slots)||1}구간) · 회사명 ${Number(m.official_named_rows)||0} · 해외 본체 ${Number(m.official_foreign_candidates)||0} · 출신국 미확인 ${Number(m.official_origin_unresolved)||0} · 웹 보강 ${Number(m.fallback_foreign_candidates)||0} · 신규 ${Number(m.returned)||0}`;
     if(id==='bcww') return `${s} 전용 ${Number(m.cycle)||1}회차 · 참가 검증 ${Number(m.evidence_verified_companies)||0} · 이메일 탐색 ${Number(m.contact_attempted)||0} · valid ${Number(m.contact_ready)||0} · 미확보 ${Number(m.contact_unresolved)||0}`;
-    if(id==='kbeauty') return `${s} 해외 후보 ${Math.min(count(id),KBEAUTY_MIN)}/${KBEAUTY_MIN} · 2026 직접 ${Number(m.current_2026_candidates)||0} · 2025 재참가 ${Number(m.repeat_2025_candidates)||0} · 이번 신규 ${Number(m.returned)||0}`;
+    if(id==='kbeauty') {
+      const k=kbeautyStats();
+      return `K-Beauty 후보 ${k.total} · 이메일 ${k.emails} · 2026 직접 ${k.direct} · 2025 재참가 ${k.repeat} · 사이트 ${k.sites}/${k.total}`;
+    }
     return `${s} 전용 ${Number(m.cycle)||1}회차 · 신규 ${Number(m.returned)||0}`;
   }
 
@@ -55,14 +70,14 @@
     updateMainButton();
     if(!isSpecial(id)) return;
     const summary=document.getElementById('summary'), live=summary?.querySelector('.hunt-live'); if(!summary)return;
-    if(!live){summary.querySelector('.hunt-found')?.remove();return;}
     if(id==='kbeauty') {
-      const text=`K-Beauty 계속 탐색 중 · ${Math.min(count(id),KBEAUTY_MIN)}/${KBEAUTY_MIN}`;
-      if(live.textContent!==text) live.textContent=text;
-    } else {
-      const time=live.textContent.match(/(\d+:\d{2})/)?.[1] || (typeof remainingText==='function'?remainingText():'00:00');
-      const liveText=`${SPECIAL[id].short} 자동사냥 종료까지 ${time} 남음`; if(live.textContent!==liveText) live.textContent=liveText;
+      summary.querySelector('.hunt-found')?.remove();
+      if(live&&live.textContent!=='K-Beauty 이메일 우선 탐색 중') live.textContent='K-Beauty 이메일 우선 탐색 중';
+      return;
     }
+    if(!live){summary.querySelector('.hunt-found')?.remove();return;}
+    const time=live.textContent.match(/(\d+:\d{2})/)?.[1] || (typeof remainingText==='function'?remainingText():'00:00');
+    const liveText=`${SPECIAL[id].short} 자동사냥 종료까지 ${time} 남음`; if(live.textContent!==liveText) live.textContent=liveText;
     let found=summary.querySelector('.hunt-found'); if(!found){found=document.createElement('strong');found.className='hunt-found';live.after(found);}
     const base=state.__campaignAutoBaseline?.id===id?Number(state.__campaignAutoBaseline.count)||0:count(id);
     const foundText=`+ ${Math.max(0,count(id)-base)}개 찾음`; if(found.textContent!==foundText) found.textContent=foundText;
@@ -84,14 +99,14 @@
     set('stopped',id,false);state.auto=true;state.autoCampaign=id;
     state.autoUntil=id==='kbeauty'?0:Date.now()+15*60*1000;
     state.__campaignAutoBaseline={id,count:count(id)};
-    state.statusText=id==='kbeauty'?`K-Beauty 해외 후보 ${Math.min(count(id),KBEAUTY_MIN)}/${KBEAUTY_MIN} · 계속 찾기 시작`:`${SPECIAL[id].short} 전용 자동사냥 시작`;
+    state.statusText=id==='kbeauty'?status(id):`${SPECIAL[id].short} 전용 자동사냥 시작`;
     saveState();render();refresh();
 
     while(state.auto&&state.autoCampaign===id&&state.currentCampaign===id&&(id==='kbeauty'||Date.now()<state.autoUntil)){
       try{await runHuntCycle();set('firstRun',id,true);renderMeta(id);}catch(e){if(!state.auto)break;state.statusText=`${SPECIAL[id].short} 이번 회차 실패 · ${String(e?.message||'').slice(0,100)} · 다음 회차 계속`;render();}
       if(!state.auto||state.currentCampaign!==id)break;
       if(id!=='kbeauty'&&Date.now()>=state.autoUntil)break;
-      if(id==='kbeauty') await wait(count(id)<KBEAUTY_MIN?1200:25000,count(id)<KBEAUTY_MIN?1200:15000);
+      if(id==='kbeauty') await wait(count(id)<KBEAUTY_MIN?1200:12000,count(id)<KBEAUTY_MIN?1200:6000);
       else await wait();
     }
 
@@ -106,7 +121,7 @@
     if(!e.target?.closest?.('#runBtn'))return;
     const id=state.currentCampaign;if(!isSpecial(id))return;
     e.preventDefault();e.stopImmediatePropagation();
-    if(state.auto&&state.autoCampaign===id)return stop(id,id==='kbeauty'?`K-Beauty 진정 · 해외 후보 ${count(id)}개 유지`:undefined);
+    if(state.auto&&state.autoCampaign===id)return stop(id,id==='kbeauty'?`K-Beauty 진정 · 후보 ${count(id)}개 유지`:undefined);
     if(state.auto&&state.autoCampaign&&state.autoCampaign!==id)stop(state.autoCampaign,'캠페인 전환으로 이전 자동사냥 중지');
     if(id==='kbeauty') return void auto(id);
     if(get('stopped',id)||!get('firstRun',id)) return void once(id);
