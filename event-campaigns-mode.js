@@ -6,6 +6,10 @@
       label:'WSCE 단체복', icon:'🌐', market:'해외→한국', message:'en', endpoint:'/api/wsce', short:'WSCE',
       confirmedKey:'wsce_confirmed', empty:'아직 확인된 WSCE 2026 해외 참가사가 없습니다.'
     },
+    kbeauty: {
+      label:'K-Beauty Expo 2026 단체복', icon:'💄', market:'해외→한국', message:'en', endpoint:'/api/kbeauty', short:'K-Beauty Expo',
+      confirmedKey:'kbeauty_confirmed', empty:'아직 확인된 K-Beauty Expo Korea 2026 해외 참가사가 없습니다.'
+    },
     education_fair: {
       label:'International Education Fair 단체복', icon:'🎓', market:'해외→한국', message:'en', endpoint:'/api/education-fair', short:'Education Fair',
       confirmedKey:'education_fair_confirmed', empty:'아직 확인된 2026 International Education Fair 해외 참가기관이 없습니다.'
@@ -35,12 +39,26 @@
     const threshold = Math.max(75, Number(lead.contact_score_threshold) || 75);
     const rows = [lead.contact, ...(Array.isArray(lead.contacts) ? lead.contacts : [])].filter(Boolean);
     return rows.find(contact => {
-      if (contact?.qualified !== true || contact?.emailStatus !== 'valid' || Number(contact?.score || 0) < threshold) return false;
       const email = String(contact?.email || '').trim().toLowerCase();
       if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email)) return false;
       const emailDomain = email.split('@')[1] || '';
       const companyDomain = typeof rootHost === 'function' ? rootHost(lead.domain || lead.url || '') : '';
-      return Boolean(companyDomain && (emailDomain === companyDomain || emailDomain.endsWith(`.${companyDomain}`)));
+      if (!companyDomain || !(emailDomain === companyDomain || emailDomain.endsWith(`.${companyDomain}`))) return false;
+
+      if (lead?.campaign === 'kbeauty') {
+        if (contact?.emailStatus === 'invalid') return false;
+        if (contact?.emailStatus === 'valid') return true;
+        const sources = Array.isArray(contact?.sources) ? contact.sources : [];
+        const providers = Array.isArray(contact?.providers) ? contact.providers : String(contact?.provider || '').split('+');
+        const officialSource = sources.some(source => {
+          try { return typeof rootHost === 'function' && rootHost(source) === companyDomain; }
+          catch { return false; }
+        });
+        const providerEvidence = providers.some(provider => /^(?:hunter|hunter_verify|jina|public_web|prospeo|apollo|tomba)$/i.test(String(provider || '')));
+        return officialSource || providerEvidence;
+      }
+
+      return contact?.qualified === true && contact?.emailStatus === 'valid' && Number(contact?.score || 0) >= threshold;
     }) || null;
   }
 
@@ -80,7 +98,9 @@
       contact:null,
       contacts:[],
       contact_status:'failed',
-      contact_failure_reason:'qualified + valid + 회사 도메인 일치 이메일 미확보'
+      contact_failure_reason:lead?.campaign === 'kbeauty'
+        ? '실제 발견 + 회사 도메인 일치 이메일 미확보'
+        : 'qualified + valid + 회사 도메인 일치 이메일 미확보'
     });
   };
 
@@ -278,7 +298,7 @@
   function rebuildCampaignSelect() {
     const select = $('campaignSelect');
     if (!select) return;
-    const fixed = ['kbw','bcww','wsce','education_fair'];
+    const fixed = ['kbw','bcww','kbeauty','wsce','education_fair'];
     const order = [...fixed, ...Object.keys(CAMPAIGNS).filter(id => !fixed.includes(id))];
     select.innerHTML = order.filter(id => CAMPAIGNS[id]).map(id => {
       const item = CAMPAIGNS[id];
