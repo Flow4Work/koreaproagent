@@ -5,13 +5,13 @@ import {
 } from '../lib/international-event-campaign.js';
 
 const EVENT = { name:'K-Beauty Expo Korea 2026', dates:'2026-10-15–2026-10-17', venue:'KINTEX, Goyang, Korea' };
-const OFFICIAL_DOMAIN = 'kbeautyexpo.com';
+const OFFICIAL_DOMAINS = new Set(['kbeautyexpo.com','k-beautyexpo.co.kr']);
 const OFFICIAL_HOME = 'https://kbeautyexpo.com/fairDash.do?hl=ENG';
 const SEEDS = [
   OFFICIAL_HOME,
   'https://kbeautyexpo.com/fairDash.do?hl=KOR',
-  'https://kbeautyexpo.com/fairCorpList.do?hl=ENG',
-  'https://kbeautyexpo.com/fairCorpList.do?hl=KOR'
+  'https://www.k-beautyexpo.co.kr/fairDash.do?hl=ENG',
+  'https://www.k-beautyexpo.co.kr/fairDash.do?hl=KOR'
 ];
 const CURRENT = /(?:K-?Beauty\s+Expo(?:\s+Korea)?[^\n]{0,120}2026|2026[^\n]{0,120}K-?Beauty\s+Expo|2026[.\-/\s]*(?:10|Oct(?:ober)?)[.\-/\s]*(?:15|16|17))/i;
 const DIRECTORY = /(fairCorp|corpList|exhibitor|participant|company|참가업체|참가사)/i;
@@ -19,7 +19,7 @@ const DIRECTORY = /(fairCorp|corpList|exhibitor|participant|company|참가업체
 const canonical = value => {
   try { const u = new URL(value); u.hash = ''; return u.toString(); } catch { return ''; }
 };
-const official = value => rootHost(value) === OFFICIAL_DOMAIN;
+const official = value => OFFICIAL_DOMAINS.has(rootHost(value));
 
 function pageVariants(url = '') {
   try {
@@ -35,10 +35,11 @@ function pageVariants(url = '') {
 
 async function crawlDirectory() {
   const seedPages = (await mapLimit(SEEDS, 4, url => fetchPage(url, { timeoutMs:7000, maxBytes:850000 }))).filter(Boolean);
+  const currentEventPages = seedPages.filter(page => official(page.url) && CURRENT.test(page.text || ''));
   const directoryUrls = new Map();
-  for (const seed of SEEDS.filter(url => /fairCorpList\.do/i.test(url))) directoryUrls.set(canonical(seed), seed);
 
-  for (const page of seedPages) {
+  // Only trust participant-directory links discovered from a page that itself proves it is the 2026 event.
+  for (const page of currentEventPages) {
     for (const link of page.links || []) {
       if (official(link.url) && DIRECTORY.test(`${link.url} ${link.text || ''}`)) {
         directoryUrls.set(canonical(link.url), link.url);
@@ -56,13 +57,12 @@ async function crawlDirectory() {
 
   const byUrl = new Map(pages.map(page => [canonical(page.url), page]));
   const directoryPages = [...byUrl.values()].filter(page =>
-    official(page.url) &&
-    DIRECTORY.test(page.url) &&
-    (/fairCorpList\.do/i.test(page.url) || CURRENT.test(page.text || '') || /K-?Beauty|뷰티/i.test(page.text || ''))
+    official(page.url) && DIRECTORY.test(page.url)
   );
 
   return {
     seedLoaded:seedPages.length,
+    currentEventPages:currentEventPages.length,
     directoryUrls:directoryUrls.size,
     pages:directoryPages
   };
@@ -141,7 +141,7 @@ async function resolveForeign(rows = [], excludes = new Set()) {
   const stats = { website:0, origin:0 };
   const resolved = (await mapLimit(rows, 6, async row => {
     const countryHint = isKoreanCountry(row.country) ? '' : row.country;
-    const website = await resolveOfficialWebsite(row.company, countryHint, row.page?.links || [], excludes, [OFFICIAL_DOMAIN]);
+    const website = await resolveOfficialWebsite(row.company, countryHint, row.page?.links || [], excludes, [...OFFICIAL_DOMAINS]);
     if (!website) { stats.website += 1; return null; }
 
     const domain = normalizeCompanyKey(website.domain);
@@ -249,6 +249,7 @@ export async function POST(request) {
         official_source:OFFICIAL_HOME,
         cycle,
         official_seed_pages_loaded:crawled.seedLoaded,
+        official_current_event_pages:crawled.currentEventPages,
         official_directory_urls:crawled.directoryUrls,
         official_directory_pages:crawled.pages.length,
         official_named_rows:named.length,
