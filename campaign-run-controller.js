@@ -4,6 +4,7 @@
 
   const SPECIAL = {
     bcww:{ short:'BCWW', endpoint:'/api/bcww', copy:'BCWW 2026 전용 검색 · 실제 참가 근거 → 해외 회사 → valid 회사 이메일 순서로 검증합니다.' },
+    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo Korea 2026 전용 검색 · 공식 참가사 → 해외 본체 → 실제 회사 이메일 순서로 검증합니다.' },
     wsce:{ short:'WSCE', endpoint:'/api/wsce', copy:'WSCE 2026 전용 검색 · 공식 참가사/직접 참가 증거 → 해외 본체 → valid 회사 이메일 순서로 검증합니다.' },
     education_fair:{ short:'Education Fair', endpoint:'/api/education-fair', copy:'International Education Fair 2026 전용 검색 · 실제 참가기관 → 해외 본체 → valid 이메일 순서로 검증합니다.' }
   };
@@ -39,6 +40,7 @@
     const m=window.__kpaCampaignMeta[id]||{}, s=SPECIAL[id].short;
     if(id==='wsce') return `${s} 전용 ${Number(m.cycle)||1}회차 · 공식 상세 ${Number(m.official_detail_rows)||0}/${Number(m.official_detail_links_total)||Number(m.official_detail_rows)||0} (${Number(m.official_detail_batch_slot)||1}/${Number(m.official_detail_batch_slots)||1}구간) · 회사명 ${Number(m.official_named_rows)||0} · 해외 본체 ${Number(m.official_foreign_candidates)||0} · 출신국 미확인 ${Number(m.official_origin_unresolved)||0} · 웹 보강 ${Number(m.fallback_foreign_candidates)||0} · 신규 ${Number(m.returned)||0}`;
     if(id==='bcww') return `${s} 전용 ${Number(m.cycle)||1}회차 · 참가 검증 ${Number(m.evidence_verified_companies)||0} · 이메일 탐색 ${Number(m.contact_attempted)||0} · valid ${Number(m.contact_ready)||0} · 미확보 ${Number(m.contact_unresolved)||0}`;
+    if(id==='kbeauty') return `${s} 전용 ${Number(m.cycle)||1}회차 · 공식 회사명 ${Number(m.official_named_rows)||0} · 이번 구간 ${Number(m.official_cycle_rows)||0} · 해외 본체 ${Number(m.official_foreign_candidates)||0} · 웹 보강 ${Number(m.fallback_foreign_candidates)||0} · 신규 ${Number(m.returned)||0}`;
     return `${s} 전용 ${Number(m.cycle)||1}회차 · 신규 ${Number(m.returned)||0}`;
   }
   function refresh(){
