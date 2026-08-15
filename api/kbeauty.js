@@ -21,7 +21,8 @@ const DIRECTORY = /(fairCorp|corpList|exhibitor|participant|company|참가업체
 const BAD_SOURCE = /(?:linkedin\.com|facebook\.com|instagram\.com|youtube\.com|x\.com|twitter\.com|wikipedia\.org|10times\.com|eventbrite\.|medium\.com)/i;
 
 // Exact foreign exhibitors from the 2025 K-Beauty Expo Korea exhibitor list.
-// These are NOT treated as confirmed 2026 attendees. They are used only as honest repeat-attendance prospects.
+// Country-pavilion membership is preserved as the foreign-origin proof for pavilion rows.
+// These are NEVER represented as confirmed 2026 attendees.
 const REPEAT_2025 = [
   ['AJMAL PERFUMES','United Arab Emirates'],
   ['Alibaba.com','China'],
@@ -189,7 +190,13 @@ async function resolveCandidate(row, excludes=new Set()) {
   const website=await resolveOfficialWebsite(row.company,row.country||'',links,excludes,[...OFFICIAL_DOMAINS]);
   if(!website) return null;
   const domain=normalizeCompanyKey(website.domain);
-  if(!domain||excludes.has(domain)) return null;
+  if(!domain||excludes.has(domain)||domain.endsWith('.kr')) return null;
+
+  if(row.tier==='repeat_2025' && row.country && !isKoreanCountry(row.country)) {
+    // The historical list/pavilion already proves foreign origin; website resolution proves the live company/domain.
+    return { ...row,country:row.country,domain:website.domain,url:website.url };
+  }
+
   const foreign=await verifyForeignEntity({ company:row.company,website,sourceText:row.sourcePage?.text||'',countryHint:row.country||'' });
   if(!foreign||isKoreanCountry(foreign.country)) return null;
   return { ...row,country:foreign.country,domain:foreign.domain,url:foreign.url };
