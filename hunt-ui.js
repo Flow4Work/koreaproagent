@@ -104,13 +104,31 @@
     if (document.querySelector('script[data-campaign-run-controller]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/campaign-run-controller.js?v=20260815-kbeauty-floor20-v2';
+      script.src = '/campaign-run-controller.js?v=20260816-kbeauty-clean-v3';
       script.dataset.campaignRunController = '1';
       document.head.appendChild(script);
       return;
     }
     attempts += 1;
     if (attempts < 160) setTimeout(load, 50);
+  };
+  load();
+})();
+
+(() => {
+  if (document.querySelector('script[data-kbeauty-runtime-fix]')) return;
+  let attempts = 0;
+  const load = () => {
+    if (document.querySelector('script[data-kbeauty-runtime-fix]')) return;
+    if (window.__KPA_CAMPAIGN_RUN_CONTROLLER__ && document.querySelector('script[data-international-event-mode]')) {
+      const script = document.createElement('script');
+      script.src = '/kbeauty-runtime-fix.js?v=20260816-full-cleanup-v1';
+      script.dataset.kbeautyRuntimeFix = '1';
+      document.head.appendChild(script);
+      return;
+    }
+    attempts += 1;
+    if (attempts < 240) setTimeout(load, 25);
   };
   load();
 })();
