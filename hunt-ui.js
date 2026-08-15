@@ -3,7 +3,7 @@
   if (!summary) return;
 
   function enhanceAutoSummary() {
-    if (typeof state !== 'undefined' && ['bcww','wsce','education_fair'].includes(state.currentCampaign)) return;
+    if (typeof state !== 'undefined' && ['bcww','kbeauty','wsce','education_fair'].includes(state.currentCampaign)) return;
     const live = summary.querySelector('.hunt-live');
     if (!live) {
       summary.classList.remove('auto-live-summary');
@@ -68,7 +68,7 @@
     if (document.querySelector('script[data-international-event-mode]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww) {
       const script = document.createElement('script');
-      script.src = '/event-campaigns-mode.js?v=20260812-international-events-v1';
+      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-floor20-v2';
       script.dataset.internationalEventMode = '1';
       document.head.appendChild(script);
       return;
@@ -104,7 +104,7 @@
     if (document.querySelector('script[data-campaign-run-controller]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/campaign-run-controller.js?v=20260813-campaign-routing-v1';
+      script.src = '/campaign-run-controller.js?v=20260815-kbeauty-floor20-v2';
       script.dataset.campaignRunController = '1';
       document.head.appendChild(script);
       return;
