@@ -72,7 +72,7 @@ ${KPA_MAIL_SIGNATURE_KO}`
 (() => {
   if (document.querySelector('script[data-bcww-mail-review]')) return;
   const script = document.createElement('script');
-  script.src = '/bcww-mail-review.js?v=20260812-bcww-v1';
+  script.src = '/bcww-mail-review.js?v=20260815-bcww-v2';
   script.dataset.bcwwMailReview = '1';
   document.head.appendChild(script);
 })();

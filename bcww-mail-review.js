@@ -1,4 +1,7 @@
 (() => {
+  if (window.__KPA_BCWW_MAIL_REVIEW_V2__) return;
+  window.__KPA_BCWW_MAIL_REVIEW_V2__ = true;
+
   const LEADS_KEY = 'kpa.hunt.leads';
   const IDS_KEY = 'kpa.mail.review.ids';
   const DRAFT_KEY = 'kpa.mail.review.drafts.v5';
@@ -49,14 +52,7 @@
         selectedEmails: [email],
         to: email,
         included: current.included !== false,
-        templateId: 'B',
-        subject: current.subject && !/KBW/i.test(current.subject)
-          ? current.subject
-          : clean(lead.subject || `Quick question about ${lead.company} at BCWW 2026`, 240),
-        body: current.body && !/\bKBW\b/i.test(current.body)
-          ? current.body
-          : clean(lead.message_en, 12000),
-        translation: current.translation || clean(lead.message_ko, 12000)
+        templateId: current.templateId === 'A' ? 'A' : 'B'
       };
       corrected.add(lead.id);
       changed = true;
@@ -69,13 +65,6 @@
   function hideKbwOnlyControls() {
     if (!reviewLeads().length) return;
     document.getElementById('kbwPackageBtn')?.remove();
-
-    document.querySelectorAll('.mail-card').forEach(card => {
-      const companyName = card.querySelector('.company-line h2')?.textContent?.trim() || '';
-      const lead = reviewLeads().find(item => clean(item.company, 120) === companyName);
-      if (!lead) return;
-      card.querySelector('.template-switch')?.closest('.field')?.remove();
-    });
   }
 
   function enforceVerifiedRecipientFields() {
