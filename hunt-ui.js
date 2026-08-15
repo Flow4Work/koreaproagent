@@ -68,7 +68,7 @@
     if (document.querySelector('script[data-international-event-mode]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww) {
       const script = document.createElement('script');
-      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-floor20-v2';
+      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-zero-fix-v3';
       script.dataset.internationalEventMode = '1';
       document.head.appendChild(script);
       return;
