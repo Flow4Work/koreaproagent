@@ -24,6 +24,7 @@
   const isEventCampaign = id => Boolean(EVENT_CAMPAIGNS[id]);
   const selectionKey = id => `kpa.hunt.selected.${id}.v1`;
   const cycleKey = id => `kpa.hunt.cycle.${id}.v1`;
+  const companyKey = value => cleanText(value,180).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 
   function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
   function currentEventConfig() { return EVENT_CAMPAIGNS[state.currentCampaign] || null; }
@@ -73,6 +74,10 @@
 
   const previousEnrichContact = enrichContact;
   enrichContact = async function internationalEventEnrichContact(lead) {
+    if (lead?.campaign === 'kbeauty' && (!lead?.domain || !safeLink(lead?.url))) {
+      patchLead(lead.id, { contact:null, contacts:[], contact_status:'website_pending', contact_failure_reason:'공식 사이트 확인 중' });
+      return;
+    }
     await previousEnrichContact(lead);
     if (!isEventCampaign(lead?.campaign)) return;
     const current = state.leads.find(item => item.id === lead.id);
@@ -93,6 +98,7 @@
       Number(state.selected.has(b.id)) - Number(state.selected.has(a.id)) ||
       Number(leadReady(b)) - Number(leadReady(a)) ||
       Number(b.kbeauty_confirmed === true) - Number(a.kbeauty_confirmed === true) ||
+      Number(Boolean(b.domain)) - Number(Boolean(a.domain)) ||
       Number(b.sales_priority || b.score || 0) - Number(a.sales_priority || a.score || 0)
     );
   }
@@ -141,6 +147,7 @@
   function eventStatus(lead = {}) {
     if (leadReady(lead)) return '발송 준비';
     if (lead.contact_status === 'searching') return '이메일 확인 중';
+    if (lead.contact_status === 'website_pending') return '공식 사이트 확인 중';
     if (lead.contact_status === 'failed') return '이메일 미확보';
     if (lead.campaign === 'kbeauty') return lead.kbeauty_confirmed ? '2026 참가 확인' : '2025 참가 · 2026 재참가 확인';
     return '참가 확인';
@@ -188,9 +195,12 @@
       const website = safeLink(lead.url);
       const mail = ready ? gmailUrl(lead) : '';
       const tier = lead.campaign === 'kbeauty' ? `<small>${esc(lead.kbeauty_confirmed ? '2026 직접 신호' : '2025 실제 참가 → 2026 재참가 후보')}</small>` : '';
+      const site = website
+        ? `<a href="${esc(website)}" target="_blank" rel="noopener noreferrer">${esc(lead.domain || '')}</a>`
+        : lead.campaign === 'kbeauty' ? `<span>공식 사이트 확인 중</span>` : `<span>${esc(lead.domain || '')}</span>`;
       return `<tr class="data-row ${ready ? 'ready-row' : ''}">
         <td class="select-cell"><input class="lead-check" data-international-event="1" type="checkbox" data-id="${esc(lead.id)}" ${checked} ${ready ? '' : 'disabled'}></td>
-        <td class="company"><span class="campaign-badge">${esc(config.short)}</span><strong>${esc(lead.company)}</strong>${tier}${website ? `<a href="${esc(website)}" target="_blank" rel="noopener noreferrer">${esc(lead.domain || '')}</a>` : `<span>${esc(lead.domain || '')}</span>`}</td>
+        <td class="company"><span class="campaign-badge">${esc(config.short)}</span><strong>${esc(lead.company)}</strong>${tier}${site}</td>
         <td class="contact">${eventContactHtml(lead)}</td>
         <td><span class="stage ${ready ? 'stage-ready' : ''}">${esc(eventStatus(lead))}</span></td>
         <td><div class="actions">${mail ? `<a class="mail-btn" href="${esc(mail)}">메일 준비하기</a>` : ''}</div></td>
@@ -203,14 +213,22 @@
     const existing = state.leads.filter(lead => lead?.campaign === campaignId);
     const byId = new Map(existing.map(lead => [lead.id || `${campaignId}:${lead.domain}`, lead]));
     const domains = new Set(existing.map(lead => String(lead.domain || '').toLowerCase()).filter(Boolean));
+    const companies = new Set(existing.map(lead => companyKey(lead.company)).filter(Boolean));
     const added = [];
     for (const raw of incoming) {
       if (raw?.campaign !== campaignId) continue;
       const domain = String(raw.domain || '').toLowerCase();
-      const id = raw.id || `${campaignId}:${domain}`;
-      if (!id || !domain || byId.has(id) || domains.has(domain)) continue;
-      const lead = { ...raw, id, domain, contact_status:raw.contact_status || 'pending' };
-      byId.set(id, lead); domains.add(domain); added.push(lead);
+      const ckey = companyKey(raw.company);
+      const id = raw.id || `${campaignId}:${domain || ckey}`;
+      if (!id || byId.has(id)) continue;
+      if (domain && domains.has(domain)) continue;
+      if (!domain && campaignId !== 'kbeauty') continue;
+      if (!domain && ckey && companies.has(ckey)) continue;
+      const lead = { ...raw, id, domain, contact_status:raw.contact_status || (domain ? 'pending' : 'website_pending') };
+      byId.set(id, lead);
+      if (domain) domains.add(domain);
+      if (ckey) companies.add(ckey);
+      added.push(lead);
     }
     const other = state.leads.filter(lead => lead?.campaign !== campaignId);
     state.leads = [...other, ...[...byId.values()].slice(-100)].slice(-MAX_BUFFER);
@@ -265,7 +283,9 @@
     if (state.currentCampaign === 'kbeauty') {
       const confirmed = Number(meta.current_2026_candidates || 0);
       const repeats = Number(meta.repeat_2025_candidates || 0);
-      state.statusText = `현재 ${Math.min(total,20)}/20 · 신규 ${added.length} · 2026 직접 ${confirmed} · 재참가 후보 ${repeats} · 이메일 확인 중`;
+      const resolved = Number(meta.website_resolved || 0);
+      const unresolved = Number(meta.website_unresolved || 0);
+      state.statusText = `현재 ${Math.min(total,20)}/20 · 신규 ${added.length} · 2026 직접 ${confirmed} · 재참가 후보 ${repeats} · 사이트 ${resolved}확인/${unresolved}확인중`;
     } else if (added.length) state.statusText = `${added.length}개 참가사 확인 · 이메일 검증 중`;
     else {
       const official = Number(meta.official_foreign_candidates || meta.official_current_participants || 0);
@@ -274,7 +294,8 @@
     }
     render();
 
-    if (added.length) await mapLimit(added.slice(0, 28), 4, enrichContact);
+    const contactable = state.currentCampaign === 'kbeauty' ? added.filter(lead => lead.domain && safeLink(lead.url)) : added;
+    if (contactable.length) await mapLimit(contactable.slice(0, 28), 4, enrichContact);
     if (state.currentCampaign === 'kbeauty') state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · 계속 탐색 중`;
     else if (added.length) state.statusText = `${added.length}개 처리 완료`;
     render();
