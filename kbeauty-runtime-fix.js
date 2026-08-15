@@ -4,6 +4,7 @@
   window.__KPA_KBEAUTY_RUNTIME_FIX__ = true;
 
   const clean = (value='', max=260) => String(value || '').replace(/\s+/g,' ').trim().slice(0,max);
+  const esc = value => String(value || '').replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
   const companyKey = value => clean(value,180).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   const badCompany = /^(?:marketing\s*\/\s*events?|공식\s*사이트\s*확인\s*중|담당자|unknown|n\/a|null|undefined|-+)$/i;
   const validCompany = lead => {
@@ -82,8 +83,7 @@
     const selected=[...state.selected].filter(id=>c.leads.some(lead=>lead.id===id)).length;
     const live=state.auto?'<span class="hunt-live">K-Beauty 이메일 우선 탐색 중</span>':'';
     const status=clean(window.__kbeautyRuntimeStatus||'',220);
-    const safeStatus=status.replace(/[&<>'"]/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[ch]));
-    const html=`<strong>K-Beauty 후보 ${c.total}개</strong><span>이메일 ${c.emails}개</span><span>2026 직접 ${c.direct}개</span><span>2025 재참가 ${c.repeats}개</span><span>사이트 ${c.sites}/${c.total}</span><span>선택 ${selected}개</span>${live}${status?`<span>${safeStatus}</span>`:''}`;
+    const html=`<strong>K-Beauty 후보 ${c.total}개</strong><span>이메일 ${c.emails}개</span><span>2026 직접 ${c.direct}개</span><span>2025 재참가 ${c.repeats}개</span><span>사이트 ${c.sites}/${c.total}</span><span>선택 ${selected}개</span>${live}${status?`<span>${esc(status)}</span>`:''}`;
     const summary=document.getElementById('summary');
     if(summary&&summary.innerHTML!==html) summary.innerHTML=html;
 
@@ -93,7 +93,13 @@
       if(!lead) return;
       const contact=emailFor(lead);
       const cell=row.querySelector('.contact');
-      if(cell&&!contact) cell.innerHTML=`<small class="pending">${statusForLead(lead)}</small>`;
+      if(cell&&!contact) {
+        cell.innerHTML=`<small class="pending">${esc(statusForLead(lead))}</small>`;
+      } else if(cell&&contact) {
+        const actualName=clean(contact.name||`${contact.first_name||''} ${contact.last_name||''}`,120);
+        const actualTitle=clean(contact.title||'',120);
+        if(!actualName&&!actualTitle) cell.innerHTML=`<strong>회사 이메일</strong><span>${esc(contact.email)}</span>`;
+      }
       const company=row.querySelector('.company strong');
       if(company&&!clean(company.textContent,180)) row.remove();
     });
@@ -107,7 +113,7 @@
       const attempts=Number(lead.kbeauty_contact_attempts||0);
       const retryAt=Number(lead.kbeauty_retry_at||0);
       return attempts<3 && retryAt<=now;
-    }).sort((a,b)=>Number(Boolean(b.domain))-Number(Boolean(a.domain)) || Number(a.kbeauty_contact_attempts||0)-Number(b.kbeauty_contact_attempts||0)).slice(0,70);
+    }).sort((a,b)=>Number(Boolean(b.domain))-Number(Boolean(a.domain)) || Number(a.kbeauty_contact_attempts||0)-Number(b.kbeauty_contact_attempts||0)).slice(0,60);
     if(!candidates.length) return {checked:0,found:0,resolved:0};
 
     for(const lead of candidates) lead.contact_status='searching';
