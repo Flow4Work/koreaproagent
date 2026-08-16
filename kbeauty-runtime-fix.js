@@ -58,6 +58,20 @@
     return cleaned;
   }
 
+  function resetLegacyContactFailuresOnce(){
+    const key='kpa.kbeauty.contact-strategy.v2';
+    if(localStorage.getItem(key)==='1') return;
+    for(const lead of (state.leads||[])){
+      if(lead?.campaign!=='kbeauty'||emailFor(lead)) continue;
+      lead.kbeauty_contact_attempts=0;
+      lead.kbeauty_retry_at=0;
+      if(lead.contact_status==='failed') lead.contact_status=lead.domain?'pending':'website_pending';
+      lead.contact_failure_reason='';
+    }
+    localStorage.setItem(key,'1');
+    saveState();
+  }
+
   function kbeautyLeads(){ return (state.leads||[]).filter(lead=>lead?.campaign==='kbeauty'&&validCompany(lead)); }
   function counts(){
     const leads=kbeautyLeads();
@@ -73,7 +87,7 @@
     if(emailFor(lead)) return '이메일 확보';
     if(lead.contact_status==='searching') return lead.domain?'이메일 찾는 중':'공식 사이트 찾는 중';
     if(!lead.domain) return '공식 사이트 미확보';
-    if(Number(lead.kbeauty_contact_attempts||0)>=3) return '이메일 미확보';
+    if(Number(lead.kbeauty_contact_attempts||0)>=4) return '이메일 미확보';
     return '이메일 확인 대기';
   }
 
@@ -81,7 +95,7 @@
     if(state.currentCampaign!=='kbeauty') return;
     const c=counts();
     const selected=[...state.selected].filter(id=>c.leads.some(lead=>lead.id===id)).length;
-    const live=state.auto?'<span class="hunt-live">K-Beauty 이메일 우선 탐색 중</span>':'';
+    const live=state.auto?'<span class="hunt-live">K-Beauty 신규 후보 + 이메일 탐색 중</span>':'';
     const status=clean(window.__kbeautyRuntimeStatus||'',220);
     const html=`<strong>K-Beauty 후보 ${c.total}개</strong><span>이메일 ${c.emails}개</span><span>2026 직접 ${c.direct}개</span><span>2025 재참가 ${c.repeats}개</span><span>사이트 ${c.sites}/${c.total}</span><span>선택 ${selected}개</span>${live}${status?`<span>${esc(status)}</span>`:''}`;
     const summary=document.getElementById('summary');
@@ -112,8 +126,8 @@
       if(emailFor(lead)) return false;
       const attempts=Number(lead.kbeauty_contact_attempts||0);
       const retryAt=Number(lead.kbeauty_retry_at||0);
-      return attempts<3 && retryAt<=now;
-    }).sort((a,b)=>Number(Boolean(b.domain))-Number(Boolean(a.domain)) || Number(a.kbeauty_contact_attempts||0)-Number(b.kbeauty_contact_attempts||0)).slice(0,60);
+      return attempts<4 && retryAt<=now;
+    }).sort((a,b)=>Number(a.kbeauty_contact_attempts||0)-Number(b.kbeauty_contact_attempts||0) || Number(Boolean(b.domain))-Number(Boolean(a.domain))).slice(0,30);
     if(!candidates.length) return {checked:0,found:0,resolved:0};
 
     for(const lead of candidates) lead.contact_status='searching';
@@ -123,7 +137,7 @@
     try{
       response=await post('/api/find-contacts',{action:'kbeauty_fast',exaKey:tools.exaKey||'',items:candidates.map(lead=>({id:lead.id,company:lead.company,country:lead.team_origin_country||'',domain:lead.domain||'',url:lead.url||''}))},110000);
     }catch(error){
-      for(const lead of candidates){lead.contact_status=lead.domain?'pending':'website_pending';lead.kbeauty_retry_at=Date.now()+60000;}
+      for(const lead of candidates){lead.contact_status=lead.domain?'pending':'website_pending';lead.kbeauty_retry_at=Date.now()+45000;}
       saveState();render();throw error;
     }
 
@@ -136,40 +150,71 @@
       if(row?.domain&&!current.domain){current.domain=row.domain;current.url=row.url||`https://${row.domain}/`;current.website_unresolved=false;resolved+=1;}
       const contacts=Array.isArray(row?.contacts)?row.contacts:[];
       if(contacts.length){
-        current.contact=contacts[0];current.contacts=contacts;current.contact_provider=contacts[0]?.provider||'hunter';current.contact_status='found';current.contact_failure_reason='';current.kbeauty_retry_at=0;found+=1;
+        current.contact=contacts[0];current.contacts=contacts;current.contact_provider=contacts[0]?.provider||'official_site';current.contact_status='found';current.contact_failure_reason='';current.kbeauty_retry_at=0;found+=1;
       }else{
         current.contact_status=current.domain?'failed':'website_pending';
         current.contact_failure_reason=current.domain?'실제 회사 이메일 미확보':'공식 사이트 미확보';
-        current.kbeauty_retry_at=Date.now()+(current.domain?10*60*1000:3*60*1000);
+        current.kbeauty_retry_at=Date.now()+(current.domain?5*60*1000:90*1000);
       }
     }
     sanitizeKBeautyState();saveState();render();
     return {checked:candidates.length,found,resolved};
   }
 
+  async function huntFreshCandidates(c){
+    const cycleKey='kpa.hunt.cycle.kbeauty.v2';
+    const lastKey='kpa.hunt.last.kbeauty.v2';
+    const last=Number(localStorage.getItem(lastKey)||'0');
+    const age=Date.now()-last;
+    if(c.total>=60 && last && age<5*60*1000) return {added:0,passes:0,lastReturned:0,throttled:true};
+    if(c.total>=30 && last && age<90*1000) return {added:0,passes:0,lastReturned:0,throttled:true};
+    let stored=Number(localStorage.getItem(cycleKey)||'0');
+    let cycle=Math.max(stored,Math.floor(c.total/32));
+    let added=0,passes=0,lastReturned=0;
+    while(passes<3 && added<20){
+      cycle+=1; passes+=1;
+      localStorage.setItem(cycleKey,String(cycle));
+      const before=counts().total;
+      window.__kbeautyRuntimeStatus=`새 후보 탐색 중 · ${passes}차`;fixUi();
+      const result=await post('/api/kbeauty',{
+        cycle,targetFloor:20,currentCount:before,
+        excludeDomains:counts().leads.map(lead=>lead.domain).filter(Boolean).slice(-500),
+        tools:typeof toolKeys==='function'?toolKeys():{}
+      },115000);
+      lastReturned=Array.isArray(result?.leads)?result.leads.length:0;
+      localStorage.setItem(lastKey,String(Date.now()));
+      if(typeof mergeLeads==='function') mergeLeads(result.leads||[]);
+      sanitizeKBeautyState();
+      const after=counts().total;
+      added+=Math.max(0,after-before);
+      if(lastReturned===0) break;
+      if(after===before && passes>=2) break;
+    }
+    return {added,passes,lastReturned};
+  }
+
   const previousRun=runHuntCycle;
   runHuntCycle=async function kbeautyFocusedRun(){
     if(state.currentCampaign!=='kbeauty') return previousRun();
     sanitizeKBeautyState();
-    let c=counts(),actualAdded=0;
+    resetLegacyContactFailuresOnce();
+    let c=counts();
 
-    if(c.total<20){
-      const cycleKey='kpa.hunt.cycle.kbeauty.v1';
-      const cycle=Number(localStorage.getItem(cycleKey)||'0')+1; localStorage.setItem(cycleKey,String(cycle));
-      const before=c.total;
-      window.__kbeautyRuntimeStatus='후보 20개 확보 중';fixUi();
-      const result=await post('/api/kbeauty',{cycle,targetFloor:20,currentCount:c.total,excludeDomains:c.leads.map(lead=>lead.domain).filter(Boolean).slice(-500),tools:typeof toolKeys==='function'?toolKeys():{}},115000);
-      if(typeof mergeLeads==='function') mergeLeads(result.leads||[]);
-      sanitizeKBeautyState();c=counts();actualAdded=Math.max(0,c.total-before);
+    let hunt={added:0,passes:0,lastReturned:0};
+    try{
+      hunt=await huntFreshCandidates(c);
+    }catch(error){
+      window.__kbeautyRuntimeStatus='신규 후보 탐색 일부 실패 · 기존 후보 이메일 계속 확인';fixUi();
     }
 
-    window.__kbeautyRuntimeStatus=`후보 ${c.total} · 이메일 ${c.emails} · 기존 후보 연락처부터 확인 중`;fixUi();
-    let fast={checked:0,found:0,resolved:0};
-    try{fast=await runFastContacts();}catch(error){window.__kbeautyRuntimeStatus='연락처 이번 회차 실패 · 다음 회차 재시도';fixUi();return actualAdded;}
     c=counts();
-    window.__kbeautyRuntimeStatus=fast.checked?`실제 신규 +${actualAdded} · 이번 이메일 +${fast.found} · 사이트 +${fast.resolved}`:`후보 ${c.total} · 이메일 ${c.emails} · 재시도 대기 중`;
+    window.__kbeautyRuntimeStatus=`후보 ${c.total} · 신규 +${hunt.added} · 이메일 탐색 중`;fixUi();
+    let fast={checked:0,found:0,resolved:0};
+    try{fast=await runFastContacts();}catch(error){window.__kbeautyRuntimeStatus=`신규 +${hunt.added} · 연락처 이번 회차 일부 실패`;fixUi();return hunt.added;}
+    c=counts();
+    window.__kbeautyRuntimeStatus=`실제 신규 +${hunt.added} · 이번 이메일 +${fast.found} · 사이트 +${fast.resolved} · 총 후보 ${c.total}`;
     fixUi();
-    return actualAdded;
+    return hunt.added;
   };
 
   const previousRender=render;
@@ -181,5 +226,6 @@
   };
 
   sanitizeKBeautyState();
+  resetLegacyContactFailuresOnce();
   if(state.currentCampaign==='kbeauty') render();
 })();
