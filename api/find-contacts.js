@@ -8,10 +8,11 @@ export async function POST(request) {
   try { body = await request.json() } catch { return Response.json({ error: 'Invalid request format' }, { status: 400 }) }
 
   if (body.action === 'kbeauty_fast') {
-    if (!process.env.HUNTER_API_KEY) return Response.json({ results: [], error:'HUNTER_API_KEY is missing' }, { status:503 });
     try {
+      // K-Beauty can still resolve websites and scrape public company emails when Hunter is absent/exhausted.
+      // Hunter is an enrichment source, not a hard dependency for this path.
       const results = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
-      return Response.json({ results }, { headers:{'Cache-Control':'no-store'} });
+      return Response.json({ results, hunterConfigured:Boolean(process.env.HUNTER_API_KEY) }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       return Response.json({ results: [], error: clean(e?.message || e, 400) }, { status:502 });
     }
