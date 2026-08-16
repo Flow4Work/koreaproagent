@@ -16,8 +16,10 @@ test('BCWW v6 keeps volume, real Tavily, and safe degradation guarantees', async
   const source = await read('lib/bcww-smart-hunt-v6.js');
   assert.match(source, /const MAX_RETURNED = 30;/);
   assert.match(source, /const MAX_RESOLVE = 42;/);
-  assert.match(source, /const MAX_CONTACTS = 14;/);
+  assert.match(source, /const MAX_CONTACTS = 4;/);
+  assert.match(source, /const SOFT_DEADLINE_MS = 65000;/);
   assert.match(source, /https:\/\/api\.tavily\.com\/search/);
+  assert.match(source, /include_raw_content:false/);
   assert.match(source, /VERIFIED_REPEAT_POOL/);
   assert.match(source, /status:200/);
   assert.match(source, /2025 participants are recurrence prospects only/);
