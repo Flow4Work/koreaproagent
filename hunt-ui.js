@@ -132,3 +132,47 @@
   };
   load();
 })();
+
+(() => {
+  if (window.__KPA_PLAIN_EMAIL_GUARD__) return;
+  window.__KPA_PLAIN_EMAIL_GUARD__ = true;
+
+  const replaceMailto = (root = document) => {
+    const links = [];
+    if (root?.nodeType === 1 && root.matches?.('a[href^="mailto:"]')) links.push(root);
+    root?.querySelectorAll?.('a[href^="mailto:"]').forEach(link => links.push(link));
+
+    for (const link of links) {
+      if (!link?.parentNode) continue;
+      const text = String(link.textContent || '').trim();
+      const span = document.createElement('span');
+      span.textContent = text;
+      span.className = link.className || '';
+      span.dataset.plainEmail = '1';
+      span.title = text;
+      link.replaceWith(span);
+    }
+  };
+
+  document.addEventListener('click', event => {
+    const link = event.target?.closest?.('a[href^="mailto:"]');
+    if (!link) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    replaceMailto(link);
+  }, true);
+
+  const start = () => {
+    replaceMailto(document);
+    const root = document.body || document.documentElement;
+    if (!root) return;
+    new MutationObserver(mutations => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes || []) replaceMailto(node);
+      }
+    }).observe(root, { childList:true, subtree:true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true });
+  else start();
+})();
