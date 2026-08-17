@@ -176,3 +176,40 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true });
   else start();
 })();
+
+(() => {
+  if (window.__KPA_HIDE_KBW__) return;
+  window.__KPA_HIDE_KBW__ = true;
+
+  const enforce = () => {
+    const select = document.getElementById('campaignSelect');
+    if (!select) return;
+
+    select.querySelectorAll('option[value="kbw"]').forEach(option => option.remove());
+
+    if (typeof state !== 'undefined' && state.currentCampaign === 'kbw') {
+      const next = (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww)
+        ? 'bcww'
+        : (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.kbeauty)
+          ? 'kbeauty'
+          : select.querySelector('option:not([value="kbw"])')?.value || '';
+      if (!next) return;
+      state.currentCampaign = next;
+      select.value = next;
+      localStorage.setItem('kpa.hunt.campaign', next);
+      state.selected?.clear?.();
+      if (typeof saveState === 'function') saveState();
+      if (typeof render === 'function') render();
+    }
+  };
+
+  const start = () => {
+    const select = document.getElementById('campaignSelect');
+    if (!select) return;
+    enforce();
+    new MutationObserver(enforce).observe(select, { childList:true });
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once:true });
+  else start();
+})();
