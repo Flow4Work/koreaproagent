@@ -300,7 +300,11 @@
     const failed = results.filter(result => !result.ok);
     if (failed.length) {
       const sent = results.filter(result => result.ok).map(result => result.to);
-      const message = `${item.selectedEmails.length}개 주소 중 ${failed.length}개 실패: ${failed.map(result => result.to).join(', ')}`;
+      const failedDetails = failed.map(result => {
+        const reason = clean(result.error?.message || '알 수 없는 오류', 300);
+        return `${result.to} (${reason})`;
+      });
+      const message = `${item.selectedEmails.length}개 주소 중 ${failed.length}개 실패: ${failedDetails.join(', ')}`;
       if (sent.length) item.error = `일부 발송 완료(${sent.join(', ')}). ${message}`;
       throw new Error(message);
     }
