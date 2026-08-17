@@ -189,4 +189,11 @@
     updateBulkButton();
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
+
+  if (!document.querySelector('script[data-kpa-found-select]')) {
+    const script = document.createElement('script');
+    script.src = '/mail-found-select.js?v=20260817-email-found-lock-v1';
+    script.dataset.kpaFoundSelect = '1';
+    document.head.appendChild(script);
+  }
 })();
