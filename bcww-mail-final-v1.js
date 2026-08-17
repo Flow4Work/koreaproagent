@@ -3,17 +3,19 @@
   const IDS_KEY = 'kpa.mail.review.ids';
   const DRAFT_KEY = 'kpa.mail.review.drafts.v5';
   const TEMPLATE_VERSION_KEY = 'kpa.bcww.mail.template.version.v1';
-  const TEMPLATE_VERSION = '20260815-user-ab-v1';
+  const TEMPLATE_VERSION = '20260817-user-ab-v2';
   const COMPANY_VERSION = '20260815-bcww-final-company-v1';
   const SIGNATURE = `Best,
 Leo Park
 NYF · Custom apparel produced in Seoul
-Instagram · @notyourflavor / @timesewingmachine
+Instagram · @notyourflavor
+Production · @timesewingmachine
 7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
   const SIGNATURE_KO = `감사합니다.
 Leo Park
 NYF · 서울 커스텀 의류 제작
-Instagram · @notyourflavor / @timesewingmachine
+Instagram · @notyourflavor
+Production · @timesewingmachine
 7-3 Daesagwan-ro 31-gil, Yongsan-gu, Seoul 04420, South Korea`;
 
   const load = (key, fallback) => {
@@ -36,45 +38,75 @@ Instagram · @notyourflavor / @timesewingmachine
     return clean(rows.find(row => /@/.test(clean(row?.email, 240)))?.email, 240).toLowerCase();
   }
 
+  function recipientFirstName(company = '') {
+    const companyKey = compact(company);
+    const lead = selectedLeads().find(item => compact(item?.company) === companyKey);
+    if (!lead) return '';
+    const rows = [lead.contact, ...(Array.isArray(lead.contacts) ? lead.contacts : [])].filter(Boolean);
+    const email = primaryEmail(lead);
+    const contact = rows.find(row => clean(row?.email, 240).toLowerCase() === email) || rows[0];
+    let firstName = clean(contact?.first_name, 60);
+    if (!firstName) {
+      const fullName = clean(contact?.name, 120);
+      const looksLikeRole = /\b(?:team|sales|contact|business|distribution|enquir|inquir|office|international|marketing|communication|licensing|rights|studio|television|corporate|manager|director)\b/i.test(fullName);
+      if (fullName && !looksLikeRole) firstName = fullName.split(/\s+/)[0] || '';
+    }
+    return clean(firstName, 40).replace(/[^\p{L}\p{M}.'-]/gu, '');
+  }
+
+  function englishGreeting(company = '') {
+    const firstName = recipientFirstName(company);
+    return firstName ? `Hi ${firstName},` : `Hi ${company} team,`;
+  }
+
+  function koreanGreeting(company = '') {
+    const firstName = recipientFirstName(company);
+    return firstName ? `안녕하세요, ${firstName}님.` : `안녕하세요, ${company} 팀.`;
+  }
+
   function installBcwwTemplates() {
     if (!window.KPA_MAIL_TEMPLATES) return;
     window.KPA_MAIL_TEMPLATES.A = {
       label: 'A',
-      subject: () => 'Booth apparel for BCWW?',
-      body: company => `Hi ${company} team,
+      subject: () => 'Team apparel in Seoul for BCWW — no overseas shipping needed',
+      body: company => `${englishGreeting(company)}
 
-Quick one — need custom T-shirts, hoodies, or staff wear for your BCWW booth? We produce locally in Seoul (official EA SPORTS vendor), so no customs delays, and we can deliver straight to COEX.
+With BCWW coming up, wanted to flag that NYF produces custom T-shirts, hoodies, and staff wear locally in Seoul — so ${company} doesn't need to ship apparel from overseas or deal with customs delays.
 
-Reply "send it" and I'll send 2–3 options with pricing.
+We handle small quantities and short timelines, and deliver directly to your hotel, office, or COEX. We've produced apparel for EA SPORTS and other international teams working in Korea.
+
+Happy to send 2–3 options with pricing and turnaround if useful — just let me know roughly what you need and the quantity.
 
 ${SIGNATURE}`,
-      translation: company => `안녕하세요, ${company} 팀.
+      translation: company => `${koreanGreeting(company)}
 
-간단히 여쭤봅니다 — BCWW 부스용 커스텀 티셔츠, 후디 또는 스태프웨어가 필요하신가요? 저희는 서울 현지에서 제작하며(EA SPORTS 공식 의류 벤더), 통관 지연 없이 COEX로 바로 배송할 수 있습니다.
+BCWW를 앞두고 안내드립니다. NYF는 커스텀 티셔츠, 후디, 스태프웨어를 서울 현지에서 제작하기 때문에 ${company}에서 해외로 의류를 배송하거나 통관 지연을 걱정할 필요가 없습니다.
 
-"send it"이라고 답장해주시면 가격이 포함된 2~3가지 옵션을 보내드리겠습니다.
+소량과 짧은 일정도 대응하며 호텔, 사무실 또는 COEX로 직접 배송합니다. EA SPORTS를 비롯해 한국에서 활동하는 여러 해외 팀의 의류를 제작해왔습니다.
+
+필요하시다면 가격과 제작 기간이 포함된 2–3가지 옵션을 보내드리겠습니다. 필요한 품목과 대략적인 수량만 알려주세요.
 
 ${SIGNATURE_KO}`
     };
     window.KPA_MAIL_TEMPLATES.B = {
       label: 'B',
-      subject: () => `EA SPORTS' Seoul apparel partner — ready for your BCWW booth`,
-      body: company => `Hi ${company} team,
+      subject: company => `Will ${company} have a team in Seoul for BCWW?`,
+      body: company => `${englishGreeting(company)}
 
-NYF is the official apparel vendor for EA SPORTS in Korea, and we've also produced staff and booth apparel for many other exhibitions at COEX.
+Quick question — will anyone from ${company} be in Seoul for BCWW this year?
 
-With BCWW coming up (Sept 14–16), we produce custom T-shirts, hoodies, and staff wear locally here in Seoul — no overseas shipping, no customs delays — and can deliver directly to COEX, your hotel, or office.
+I run NYF, a Seoul-based apparel production service for international teams visiting Korea — staff wear, branded T-shirts, hoodies, and small merch runs, all made locally so there's no shipping or customs to deal with.
 
-Want 2–3 options with pricing and turnaround times? Just reply "send it."
+If this isn't your area, I'd appreciate a pointer to whoever handles events or ops for ${company}.
 
 ${SIGNATURE}`,
-      translation: company => `안녕하세요, ${company} 팀.
+      translation: company => `${koreanGreeting(company)}
 
-NYF는 한국에서 EA SPORTS의 공식 의류 벤더이며, COEX에서 열린 여러 다른 전시회의 스태프 및 부스 의류도 제작해왔습니다.
+간단히 여쭤봅니다. 올해 ${company}에서 BCWW 참석을 위해 서울에 오는 분이 있을까요?
 
-BCWW(9월 14–16일)를 앞두고 커스텀 티셔츠, 후디, 스태프웨어를 서울 현지에서 제작합니다. 해외 배송이나 통관 지연 없이 COEX, 호텔 또는 사무실로 직접 배송할 수 있습니다.
+저는 한국을 방문하는 해외 팀을 위해 서울에서 의류를 제작하는 NYF를 운영하고 있습니다. 스태프웨어, 브랜드 티셔츠, 후디, 소량 머천다이즈까지 모두 현지에서 제작하기 때문에 해외 배송이나 통관 문제를 신경 쓸 필요가 없습니다.
 
-가격과 제작 기간이 포함된 2~3가지 옵션을 원하시면 "send it"이라고 답장해주세요.
+담당 업무가 아니시라면 ${company}에서 이벤트나 운영을 담당하는 분을 알려주시면 감사하겠습니다.
 
 ${SIGNATURE_KO}`
     };
