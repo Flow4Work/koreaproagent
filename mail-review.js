@@ -380,7 +380,7 @@
     if (invalid) { render(); alert('오류가 표시된 메일을 확인해주세요.'); return; }
     if (!await ensureGmail()) return;
     const totalEmails = queue.reduce((total, item) => total + item.selectedEmails.length, 0);
-    if (!confirm(`${queue.length}개 회사의 ${totalEmails}개 실제 메일을 발송합니다. 같은 회사의 여러 주소는 동시에 발송하고, 회사 사이에는 60~180초 간격을 둡니다. 진행할까요?`)) return;
+    if (!confirm(`${queue.length}개 회사의 ${totalEmails}개 실제 메일을 발송합니다. 같은 회사의 여러 주소는 동시에 발송하고, 회사 사이에는 25~45초 간격을 둡니다. 진행할까요?`)) return;
     state.sending = true;
     state.stop = false;
     $('stopSendBtn').disabled = false;
@@ -400,7 +400,7 @@
       }
       persist();
       render();
-      if (queue[i + 1] && !state.stop) await wait(60_000 + Math.floor(Math.random() * 120_001), queue[i + 1]);
+      if (queue[i + 1] && !state.stop) await wait(25_000 + Math.floor(Math.random() * 20_001), queue[i + 1]);
     }
     state.sending = false;
     state.stop = false;
