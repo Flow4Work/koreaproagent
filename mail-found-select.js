@@ -94,18 +94,22 @@
     if (!button) return;
     const count = eligibleIds().size;
     const locked = isLocked();
-    button.textContent = locked ? `메일 찾은 곳 전체 선택 (${count}) · 잠금` : `메일 찾은 곳 전체 선택${count ? ` (${count})` : ''}`;
+    const text = locked ? `메일 찾은 곳 전체 선택 (${count}) · 잠금` : `메일 찾은 곳 전체 선택${count ? ` (${count})` : ''}`;
+    const title = locked ? '선택 해제를 누르면 잠금이 풀립니다.' : '현재 카테고리에서 이메일이 확보된 회사를 모두 선택하고 잠급니다.';
+    if (button.textContent !== text) button.textContent = text;
     button.classList.toggle('locked', locked);
-    button.disabled = locked;
-    button.title = locked ? '선택 해제를 누르면 잠금이 풀립니다.' : '현재 카테고리에서 이메일이 확보된 회사를 모두 선택하고 잠급니다.';
+    if (button.disabled !== locked) button.disabled = locked;
+    if (button.title !== title) button.title = title;
   }
 
   function paintPrepareButton() {
     const button = document.getElementById('prepareSelectedBtn');
     if (!button) return;
     const count = state.selected.size;
-    button.textContent = count ? `선택한 메일 준비하기 (${count})` : '선택한 메일 준비하기';
-    button.disabled = count === 0;
+    const text = count ? `선택한 메일 준비하기 (${count})` : '선택한 메일 준비하기';
+    const disabled = count === 0;
+    if (button.textContent !== text) button.textContent = text;
+    if (button.disabled !== disabled) button.disabled = disabled;
   }
 
   function releaseDomLock() {
