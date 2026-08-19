@@ -105,7 +105,15 @@
   <script src="/permanent-delete.js?v=20260811-permanent-delete-restore-v1" defer></script>
   <script src="/mail-prep-ui.js?v=20260801-row-click-selection-v1" defer></script>
   <script src="/hunt-ui.js?v=20260730-hunt-hype-v1" defer></script>
-  <script src="/kbeauty-runtime-fix.js?v=20260817-contact-pipeline-v3" defer></script>
+  <script>
+    (() => {
+      const migrationKey = 'kpa.kbeauty.runtime-v4.1-reset';
+      if (localStorage.getItem(migrationKey) === '1') return;
+      localStorage.removeItem('kpa.kbeauty.email-priority.v4');
+      localStorage.setItem(migrationKey, '1');
+    })();
+  </script>
+  <script src="/kbeauty-runtime-fix.js?v=20260819-kbeauty-email-v4-1" defer></script>
 
   <!-- Inline fallback: delete must remain available even if the separate helper script fails to load. -->
   <script>
