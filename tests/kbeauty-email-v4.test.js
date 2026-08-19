@@ -8,12 +8,21 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const fastPath=path.join(root,'lib','kbeauty-fast-contact-v4.js');
 const runtimePath=path.join(root,'kbeauty-runtime-fix.js');
 const apiPath=path.join(root,'api','find-contacts.js');
+const indexPath=path.join(root,'index.html');
 const source=file=>readFile(file,'utf8');
 
 test('K-Beauty API uses the email-v4 contact pipeline only for kbeauty_fast',async()=>{
   const text=await source(apiPath);
   assert.match(text,/kbeauty-fast-contact-v4\.js/);
   assert.match(text,/pipeline:'kbeauty-email-v4'/);
+});
+
+test('K-Beauty page forces the current email-v4 runtime and reopens stale failures once',async()=>{
+  const text=await source(indexPath);
+  assert.match(text,/kpa\.kbeauty\.runtime-v4\.1-reset/);
+  assert.match(text,/localStorage\.removeItem\('kpa\.kbeauty\.email-priority\.v4'\)/);
+  assert.match(text,/kbeauty-runtime-fix\.js\?v=20260819-kbeauty-email-v4-1/);
+  assert.doesNotMatch(text,/kbeauty-runtime-fix\.js\?v=20260817-contact-pipeline-v3/);
 });
 
 test('email-v4 crawls real official contact variants before giving up',async()=>{
