@@ -1,6 +1,5 @@
 (() => {
-  // The legacy v4 runtime and event-mode K-Beauty recovery both wrapped runHuntCycle.
-  // Block any later v4 execution; v5 installs after the event campaign/controller layers exist.
+  // K-Beauty has one runtime owner. Legacy v4 must never wrap the campaign again.
   window.__KPA_KBEAUTY_RUNTIME_V4__ = true;
   if (window.__KPA_KBEAUTY_RUNTIME_V5_LOADING__) return;
   window.__KPA_KBEAUTY_RUNTIME_V5_LOADING__ = true;
@@ -8,14 +7,15 @@
   const TARGET_SENDABLE = 20;
   const MAX_DOMAIN_ATTEMPTS = 3;
   const MAX_CONTACT_ATTEMPTS = 3;
-  const MAX_DEEP_ATTEMPTS = 1;
   const DOMAIN_PER_CYCLE = 18;
   const CONTACT_PER_PASS = 12;
-  const DEEP_PER_CYCLE = 2;
-  const PRIORITY_DOMAINS = new Set(['imspackaging.com','ajmal.com','groupe-gilbert.fr','bulgarianrose.bg','ptn-healthcare.de','moririn.co.jp','alibaba.com','cnwellpack.com','zhuhaibaoli.com']);
+  const PRIORITY_DOMAINS = [
+    'imspackaging.com','bulgarianrose.bg','ptn-healthcare.de','ajmal.com','groupe-gilbert.fr',
+    'moririn.co.jp','alibaba.com','cnwellpack.com','zhuhaibaoli.com'
+  ];
   const JUNK_LOCAL = /^(?:security|privacy|legal|billing|careers|jobs|hr|noreply|no-reply|abuse|postmaster|webmaster|mailer-daemon)$/i;
   const EVIDENCE_PROVIDER = /^(?:hunter|hunter_verify|jina|public_web|prospeo|apollo|tomba|official_site|official_recovery|nvidia_muse_glimmer|tavily)$/i;
-  const MIGRATION_KEY = 'kpa.kbeauty.runtime-v5.1-reset';
+  const MIGRATION_KEY = 'kpa.kbeauty.runtime-v5.2-reset';
 
   const clean = (value = '', max = 300) => String(value || '').replace(/\s+/g,' ').trim().slice(0,max);
   const companyKey = value => clean(value,180).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
@@ -162,9 +162,14 @@
     await Promise.all(Array.from({length:Math.min(limit,list.length)},runner));
   }
 
+  function priorityRank(domain='') {
+    const index = PRIORITY_DOMAINS.indexOf(rootHost(domain));
+    return index < 0 ? 999 : index;
+  }
+
   function prioritySort(a,b) {
     const ad = rootHost(a.domain || a.url || ''), bd = rootHost(b.domain || b.url || '');
-    return Number(PRIORITY_DOMAINS.has(bd)) - Number(PRIORITY_DOMAINS.has(ad))
+    return priorityRank(ad) - priorityRank(bd)
       || Number(a.kbeauty_v5_contact_attempts || 0) - Number(b.kbeauty_v5_contact_attempts || 0)
       || companyKey(a.company).localeCompare(companyKey(b.company));
   }
@@ -178,26 +183,43 @@
       .sort(prioritySort).slice(0,limit);
     if (!candidates.length) return {checked:0,found:0};
 
+    const tools = typeof toolKeys === 'function' ? toolKeys() : {};
     let found = 0;
-    await mapLimit(candidates,4,async lead => {
+    await mapLimit(candidates,3,async lead => {
       const current = (state.leads || []).find(item => item.id === lead.id);
       if (!current) return;
       current.contact_status = 'searching';
       current.kbeauty_v5_contact_attempts = Number(current.kbeauty_v5_contact_attempts || 0) + 1;
       if (typeof render === 'function') render();
       try {
-        const response = await post('/api/contact',{
-          url:`https://${rootHost(current.domain || current.url || '')}/`,
-          recommendedRole:current.recommended_role || 'Marketing / Events',
-          roleTargets:Array.isArray(current.role_targets)?current.role_targets:[]
-        },36000);
-        current.contact_diagnostics = Array.isArray(response?.attempts) ? response.attempts : [];
-        current.contact_provider_status = response?.provider_status || {};
-        mergeContacts(current,response?.contacts || []);
+        // One company per request: use the full evidence-bound K-Beauty pipeline so Tavily/official-site/NVIDIA
+        // recovery is available without letting one slow company erase the rest of the batch.
+        const response = await post('/api/find-contacts',{
+          action:'kbeauty_fast',
+          exaKey:tools.exaKey || '',
+          items:[{
+            id:current.id,
+            company:current.company,
+            country:current.team_origin_country || '',
+            domain:rootHost(current.domain || current.url || ''),
+            url:current.url || `https://${rootHost(current.domain || current.url || '')}/`
+          }]
+        },76000);
+        const row = Array.isArray(response?.results) ? response.results[0] : null;
+        current.contact_diagnostics = Array.isArray(row?.diagnostics) ? row.diagnostics : [];
+        current.contact_provider_status = response?.meta?.provider_status || {};
+        if (row?.domain && !rootHost(current.domain || current.url || '')) {
+          current.domain = row.domain;
+          current.url = row.url || `https://${row.domain}/`;
+        }
+        mergeContacts(current,row?.contacts || []);
         if (acceptedContact(current)) found += 1;
         else {
           current.contact_status = 'failed';
-          current.contact_failure_reason = clean(response?.failure_reason || response?.stop_reason || '공개/연결 공급자에서 회사 이메일 미확보',160);
+          const problem = current.contact_diagnostics.find(item => item?.ok === false && item?.error && !['not_configured','no_match','no_email','no_domain_match','missing_domain'].includes(item.error));
+          current.contact_failure_reason = problem
+            ? `${clean(problem.provider,40)} ${clean(problem.error,100)}`
+            : '공식/검색 근거에서 실제 회사 이메일 미확보';
           current.kbeauty_v5_retry_at = Date.now() + 30000;
         }
       } catch (error) {
@@ -235,7 +257,7 @@
         const current = (state.leads || []).find(item => item.id === lead.id);
         if (current) current.contact_status = 'searching';
       }
-      saveRender(`K-Beauty v5 · 공식 사이트 확인 ${i+1}/${batches.length} · 이메일 ${counts().sendable}/${TARGET_SENDABLE}`);
+      saveRender(`K-Beauty v5.2 · 공식 사이트 확인 ${i+1}/${batches.length} · 이메일 ${counts().sendable}/${TARGET_SENDABLE}`);
       let response = null;
       try {
         response = await post('/api/find-contacts',{
@@ -271,36 +293,6 @@
     return {checked,resolved};
   }
 
-  async function deepFallback(limit = DEEP_PER_CYCLE) {
-    const candidates = leads()
-      .filter(lead => rootHost(lead.domain || lead.url || '') && !acceptedContact(lead)
-        && Number(lead.kbeauty_v5_contact_attempts || 0) >= 1
-        && Number(lead.kbeauty_v5_deep_attempts || 0) < MAX_DEEP_ATTEMPTS)
-      .sort(prioritySort).slice(0,limit);
-    if (!candidates.length) return {checked:0,found:0};
-    const tools = typeof toolKeys === 'function' ? toolKeys() : {};
-    let found = 0;
-    await mapLimit(candidates,2,async lead => {
-      const current = (state.leads || []).find(item => item.id === lead.id);
-      if (!current) return;
-      current.kbeauty_v5_deep_attempts = Number(current.kbeauty_v5_deep_attempts || 0) + 1;
-      try {
-        const response = await post('/api/find-contacts',{
-          action:'kbeauty_fast',exaKey:tools.exaKey||'',
-          items:[{id:current.id,company:current.company,country:current.team_origin_country||'',domain:current.domain||'',url:current.url||''}]
-        },70000);
-        const row = Array.isArray(response?.results) ? response.results[0] : null;
-        if (row?.domain && !rootHost(current.domain || current.url || '')) {
-          current.domain = row.domain; current.url = row.url || `https://${row.domain}/`;
-        }
-        mergeContacts(current,row?.contacts || []);
-        if (acceptedContact(current)) found += 1;
-      } catch {}
-    });
-    saveRender();
-    return {checked:candidates.length,found};
-  }
-
   async function seedIfNeeded() {
     const before = counts().total;
     if (before >= 20) return {added:0};
@@ -320,21 +312,20 @@
   async function runKBeautyV5() {
     migrateOnce();
     let c = counts();
-    saveRender(`K-Beauty v5 · 후보 ${c.total} · 사이트 ${c.sites}/${c.total} · 이메일 ${c.sendable}/${TARGET_SENDABLE}`);
+    saveRender(`K-Beauty v5.2 · 후보 ${c.total} · 사이트 ${c.sites}/${c.total} · 이메일 ${c.sendable}/${TARGET_SENDABLE}`);
 
     const seed = await seedIfNeeded();
     const first = await recoverKnownDomains(CONTACT_PER_PASS);
     const domains = await resolveMissingDomains(DOMAIN_PER_CYCLE);
     const second = domains.resolved ? await recoverKnownDomains(8) : {checked:0,found:0};
-    const deep = await deepFallback(DEEP_PER_CYCLE);
 
     c = counts();
-    const found = first.found + second.found + deep.found;
-    state.statusText = `K-Beauty v5 · 이메일 +${found} · 사이트 +${domains.resolved} · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · 사이트 ${c.sites}/${c.total}`;
+    const found = first.found + second.found;
+    state.statusText = `K-Beauty v5.2 · 이메일 +${found} · 사이트 +${domains.resolved} · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · 사이트 ${c.sites}/${c.total}`;
 
-    const didWork = seed.added + first.checked + domains.checked + second.checked + deep.checked;
+    const didWork = seed.added + first.checked + domains.checked + second.checked;
     if (!didWork && c.sendable < TARGET_SENDABLE) {
-      state.statusText = `K-Beauty v5 · 현재 후보의 검색 경로 소진 · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · 사이트 ${c.sites}/${c.total}`;
+      state.statusText = `K-Beauty v5.2 · 현재 후보의 검색 경로 소진 · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · 사이트 ${c.sites}/${c.total}`;
       if (state.auto && state.autoCampaign === 'kbeauty') {
         state.auto = false;
         state.autoCampaign = '';
