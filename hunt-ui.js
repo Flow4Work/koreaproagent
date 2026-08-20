@@ -116,14 +116,15 @@
 })();
 
 (() => {
-  if (document.querySelector('script[data-kbeauty-runtime-fix]')) return;
+  // One deterministic K-Beauty runtime loader. Do not load the legacy v4 wrapper anywhere.
+  if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
   let attempts = 0;
   const load = () => {
-    if (document.querySelector('script[data-kbeauty-runtime-fix]')) return;
+    if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
     if (window.__KPA_CAMPAIGN_RUN_CONTROLLER__ && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/kbeauty-runtime-fix.js?v=20260816-full-cleanup-v1';
-      script.dataset.kbeautyRuntimeFix = '1';
+      script.src = '/kbeauty-runtime-v5.js?v=20260821-single-owner-v5-2';
+      script.dataset.kbeautyRuntimeV5 = '1';
       document.head.appendChild(script);
       return;
     }
