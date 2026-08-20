@@ -18,25 +18,16 @@
 
     return Boolean(validFormat && explicitlyVerified && hasEvidence && (explicitlyTrusted || exactPublicFreshBatch));
   };
+})();
 
-  // Older static catalogs merge first, then the 2026-08-11 batch, then the new
-  // 2026-08-12 batch. Each fresh batch rechecks sent/deleted/rejected/current domains.
-  const loadFresh20 = () => {
-    if (document.querySelector('script[data-kbw-fresh20-20260811]')) return;
-    const script = document.createElement('script');
-    script.src = '/kbw-fresh-20-20260811.js?v=20260811-kbw-fresh20-v2';
-    script.dataset.kbwFresh20260811 = '1';
-    document.head.appendChild(script);
-  };
-
-  const loadFresh20_20260812 = () => {
-    if (document.querySelector('script[data-kbw-fresh20-20260812]')) return;
-    const script = document.createElement('script');
-    script.src = '/kbw-fresh-20-20260812.js?v=20260812-kbw-fresh20-v2';
-    script.dataset.kbwFresh20260812 = '1';
-    document.head.appendChild(script);
-  };
-
-  setTimeout(loadFresh20, 1800);
-  setTimeout(loadFresh20_20260812, 2800);
+// KBW is hidden from the active UI. The old fresh-20 loaders used to mutate global state
+// 1.8/2.8 seconds after every page load and overwrite K-Beauty status with
+// "KBW 해외 신규 후보 ...". Do not start those legacy injectors globally anymore.
+// Load the single-owner K-Beauty runtime instead; it waits until event/controller layers are ready.
+(() => {
+  if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
+  const script = document.createElement('script');
+  script.src = '/kbeauty-runtime-v5.js?v=20260821-single-owner-v5-1';
+  script.dataset.kbeautyRuntimeV5 = '1';
+  document.head.appendChild(script);
 })();
