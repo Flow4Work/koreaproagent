@@ -1,6 +1,7 @@
 import { hunterConfigured, findContacts, normalizeContacts } from '../lib/hunter.js';
 import { findKBeautyContactsFast } from '../lib/kbeauty-fast-contact-v4.js';
 import { nvidiaKBeautyConfigured, recoverKBeautyContactRows } from '../lib/kbeauty-nvidia-recovery.js';
+import { resolveKBeautyDomainsV5 } from '../lib/kbeauty-domain-resolver-v5.js';
 
 function clean(v, max = 200) { return typeof v === 'string' ? v.trim().slice(0, max) : '' }
 
@@ -27,6 +28,20 @@ export async function POST(request) {
   let body = {};
   try { body = await request.json() } catch { return Response.json({ error: 'Invalid request format' }, { status: 400 }) }
 
+  if (body.action === 'kbeauty_domains') {
+    try {
+      const results = await resolveKBeautyDomainsV5(body.items || [], clean(body.exaKey, 5000));
+      return Response.json({
+        results,
+        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,12):0,pipeline:'kbeauty-domain-v5'}
+      }, { headers:{'Cache-Control':'no-store'} });
+    } catch (e) {
+      console.error('[kbeauty_domains] fatal', clean(e?.message || e, 400));
+      return Response.json({ results: [], error: clean(e?.message || e, 400) }, { status:502 });
+    }
+  }
+
+  // Legacy one-company deep fallback. V5 no longer uses this as the primary/batch path.
   if (body.action === 'kbeauty_fast') {
     try {
       const baseResults = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
