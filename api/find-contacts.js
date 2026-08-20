@@ -1,5 +1,6 @@
 import { hunterConfigured, findContacts, normalizeContacts } from '../lib/hunter.js';
 import { findKBeautyContactsFast } from '../lib/kbeauty-fast-contact-v4.js';
+import { nvidiaKBeautyConfigured, recoverKBeautyContactRows } from '../lib/kbeauty-nvidia-recovery.js';
 
 function clean(v, max = 200) { return typeof v === 'string' ? v.trim().slice(0, max) : '' }
 
@@ -28,14 +29,16 @@ export async function POST(request) {
 
   if (body.action === 'kbeauty_fast') {
     try {
-      const results = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
+      const baseResults = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
+      const results = await recoverKBeautyContactRows(baseResults, body.items || []);
       const providers=providerSummary(results);
-      const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match'].includes(error)));
+      const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match','missing_domain'].includes(error)));
       if(hardFailures.length) console.warn('[kbeauty_fast] provider failures', JSON.stringify(hardFailures));
       return Response.json({
         results,
         hunterConfigured:Boolean(process.env.HUNTER_API_KEY),
-        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-v4'}
+        nvidiaConfigured:nvidiaKBeautyConfigured(),
+        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-v4+nvidia-recovery'}
       }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       console.error('[kbeauty_fast] fatal', clean(e?.message || e, 400));
