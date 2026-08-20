@@ -62,7 +62,7 @@ test('known domains prioritize IMS then run official/Tavily/NVIDIA recovery inde
   const runtime = await source('kbeauty-runtime-v5.js');
   assert.match(runtime,/PRIORITY_DOMAINS = \[\s*'imspackaging\.com'/);
   assert.match(runtime,/items:\[\{[\s\S]*?company:current\.company/);
-  assert.match(runtime,/official\/search 근거에서 실제 회사 이메일 미확보/);
+  assert.match(runtime,/공식\/검색 근거에서 실제 회사 이메일 미확보/);
   assert.doesNotMatch(runtime,/MAX_DEEP_ATTEMPTS/);
   assert.doesNotMatch(runtime,/deepFallback/);
 });
