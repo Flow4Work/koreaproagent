@@ -1,4 +1,4 @@
-import { hunterConfigured, findContacts, normalizeContacts } from '../lib/hunter.js';
+import { contactDiscoveryConfigured as hunterConfigured, findContacts, normalizeContacts } from '../lib/contact-discovery.js';
 import { findKBeautyContactsFast } from '../lib/kbeauty-fast-contact-v4.js';
 import { nvidiaKBeautyConfigured, recoverKBeautyContactRows } from '../lib/kbeauty-nvidia-recovery.js';
 import { resolveKBeautyDomainsV5 } from '../lib/kbeauty-domain-resolver-v5.js';
