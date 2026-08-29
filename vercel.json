@@ -28,7 +28,6 @@
     "api/kbeauty.js": {"maxDuration": 120},
     "api/education-fair.js": {"maxDuration": 120},
     "api/contact.js": {"maxDuration": 120},
-    "api/company-identity.js": {"maxDuration": 120},
     "api/find-contacts.js": {"maxDuration": 120},
     "api/deleted.js": {"maxDuration": 30},
     "api/health.js": {"maxDuration": 15}
