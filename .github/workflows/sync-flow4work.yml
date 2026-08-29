@@ -1,0 +1,76 @@
+name: Sync from Flow4Work
+
+on:
+  workflow_dispatch:
+    inputs:
+      proceed:
+        description: "Run fast-forward sync from Flow4Work/koreaproagent main"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout daijobukr main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Record pre-sync HEAD
+        id: presync
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream https://github.com/Flow4Work/koreaproagent.git
+          git fetch upstream main
+
+      - name: Verify ancestor (fast-forward precondition)
+        id: verify
+        run: |
+          LOCAL=$(git rev-parse HEAD)
+          UPSTREAM=$(git rev-parse upstream/main)
+          echo "local HEAD (daijobukr/main):   $LOCAL"
+          echo "upstream HEAD (Flow4Work/main): $UPSTREAM"
+          if [ "$LOCAL" = "$UPSTREAM" ]; then
+            echo "Already up to date with upstream/main."
+          elif git merge-base --is-ancestor "$LOCAL" "$UPSTREAM"; then
+            echo "daijobukr/main is an ancestor of upstream/main - fast-forward is possible."
+          else
+            echo "::error::daijobukr/main is NOT an ancestor of upstream/main. A non-fast-forward merge would be required; aborting (force push is forbidden)."
+            exit 1
+          fi
+
+      - name: Fast-forward only
+        run: git merge --ff-only upstream/main
+
+      - name: Push to origin main (no force)
+        run: git push origin main
+
+      - name: Record post-sync HEAD
+        id: postsync
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Sync from Flow4Work - Result"
+            echo ""
+            echo "- Pre-sync HEAD : \`${{ steps.presync.outputs.sha }}\`"
+            echo "- Post-sync HEAD: \`${{ steps.postsync.outputs.sha }}\`"
+            echo ""
+            echo "Vercel Production deploys automatically when main is updated."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Pre-sync HEAD : ${{ steps.presync.outputs.sha }}"
+          echo "Post-sync HEAD: ${{ steps.postsync.outputs.sha }}"
