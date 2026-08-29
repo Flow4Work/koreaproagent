@@ -70,6 +70,13 @@ ${KPA_MAIL_SIGNATURE_KO}`
 };
 
 (() => {
+  if (!document.querySelector('script[data-company-identity-runtime]')) {
+    const identityScript = document.createElement('script');
+    identityScript.src = '/company-name-llm.js?v=20260829-company-identity-v1';
+    identityScript.dataset.companyIdentityRuntime = '1';
+    document.head.appendChild(identityScript);
+  }
+
   if (document.querySelector('script[data-bcww-mail-review]')) return;
   const script = document.createElement('script');
   script.src = '/bcww-mail-review.js?v=20260815-bcww-v2';
