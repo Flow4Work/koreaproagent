@@ -1,4 +1,11 @@
 (() => {
+  if (!document.querySelector('script[data-company-identity-runtime]')) {
+    const script = document.createElement('script');
+    script.src = '/company-name-llm.js?v=20260829-company-identity-v1';
+    script.dataset.companyIdentityRuntime = '1';
+    document.head.appendChild(script);
+  }
+
   if (typeof usableEmail !== 'function') return;
 
   const originalUsableEmail = usableEmail;
