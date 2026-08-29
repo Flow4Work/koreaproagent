@@ -32,12 +32,6 @@
     return parts.slice(-(MULTI_SUFFIXES.has(suffix2) ? 3 : 2)).join('.');
   }
 
-  function emailDomain(value = '') {
-    const email = clean(value, 240).toLowerCase();
-    const match = email.match(/^[^@\s]+@([^@\s]+)$/);
-    return match ? rootDomain(match[1]) : '';
-  }
-
   function identityVerified(identity = {}) {
     return identity?.status === 'verified'
       && Number(identity?.confidence || 0) >= 0.85
@@ -57,12 +51,9 @@
     const names = globalThis.KPA_COMPANY_NAMES;
     const greeting = clean(lead?.greeting_name || lead?.brand_name || lead?.company, 120);
     if (!greeting) return false;
-    let changed = false;
-    for (const draft of Object.values(drafts || {})) {
-      if (!draft || typeof draft !== 'object' || draft.__leadId !== lead.id) continue;
-    }
     const draft = drafts?.[lead.id];
     if (!draft || typeof draft !== 'object') return false;
+    let changed = false;
     if (typeof draft.body === 'string') {
       const next = names?.rewriteEnglishGreeting
         ? names.rewriteEnglishGreeting(draft.body, lead, false)
@@ -139,29 +130,33 @@
     try {
       const leads = load(LEADS_KEY, []);
       if (!Array.isArray(leads) || !leads.length) return;
-      const targets = leads.filter(lead => {
+      const allPending = leads.filter(lead => {
         if (!lead?.id || !clean(lead?.raw_company || lead?.company, 220)) return false;
         return lead.company_identity_version !== VERSION || !lead.company_identity;
-      }).slice(0, 30);
+      });
+      const targets = allPending.slice(0, 30);
       if (!targets.length) return;
 
       let response;
       try {
-        response = await fetch('/api/company-identity', {
+        response = await fetch('/api/contact', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'same-origin',
           cache: 'no-store',
-          body: JSON.stringify({ items: targets.map(lead => ({
-            id: lead.id,
-            company: clean(lead.raw_company || lead.company, 220),
-            raw_name: clean(lead.raw_company || lead.company, 220),
-            domain: clean(lead.domain, 240),
-            url: clean(lead.url, 500),
-            country: clean(lead.country, 100),
-            source_title: clean(lead.source_title, 320),
-            source_url: clean(lead.source_url, 500)
-          })) })
+          body: JSON.stringify({
+            action: 'company_names',
+            items: targets.map(lead => ({
+              id: lead.id,
+              company: clean(lead.raw_company || lead.company, 220),
+              raw_name: clean(lead.raw_company || lead.company, 220),
+              domain: clean(lead.domain, 240),
+              url: clean(lead.url, 500),
+              country: clean(lead.country, 100),
+              source_title: clean(lead.source_title, 320),
+              source_url: clean(lead.source_url, 500)
+            }))
+          })
         });
       } catch { return; }
       if (!response?.ok) return;
@@ -179,6 +174,7 @@
       save(LEADS_KEY, leads);
       for (const [key, drafts] of Object.entries(draftsByKey)) save(key, drafts);
       localStorage.setItem('kpa.company-identity-schema', VERSION);
+      if (allPending.length > targets.length) rerun = true;
 
       if (typeof state !== 'undefined' && Array.isArray(state.leads)) {
         const byId = new Map(leads.map(lead => [lead.id, lead]));
@@ -247,7 +243,6 @@
       const wrapped = function(id, patch) {
         const nextPatch = { ...(patch || {}) };
         if (Object.prototype.hasOwnProperty.call(nextPatch, 'company') || Object.prototype.hasOwnProperty.call(nextPatch, 'domain') || Object.prototype.hasOwnProperty.call(nextPatch, 'url')) {
-          delete nextPatch.company_identity;
           nextPatch.company_identity_version = '';
         }
         const result = original.call(this, id, nextPatch);
