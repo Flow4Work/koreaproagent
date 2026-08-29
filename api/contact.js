@@ -2,7 +2,7 @@ import { POST as baseHunt } from './hunt.js';
 import { findContacts } from '../lib/contact-discovery-v2.js';
 import { attendanceGrade, mergeEvidence } from '../lib/hunt-qualification.js';
 import { listSentCompanyDomains, normalizeCompanyKey } from '../lib/sent-companies.js';
-import { aiConfigured, chatJson } from '../lib/ai-provider.js';
+import { IDENTITY_VERSION, resolveCompanyIdentities } from '../lib/company-identity.js';
 
 function clean(value, max = 500) { return typeof value === 'string' ? value.trim().slice(0, max) : ''; }
 function safeError(value = '') { return String(value).replace(/[A-Za-z0-9_-]{32,}/g, '[key]').slice(0, 500); }
@@ -16,58 +16,39 @@ function normalizeCompanyName(value = '') {
 
 async function cleanCompanyNames(body = {}) {
   const items = (Array.isArray(body.items) ? body.items : []).slice(0, 30).map(item => ({
-    id: clean(item?.id, 160),
-    current_name: normalizeCompanyName(item?.company),
-    domain: clean(item?.domain, 180),
-    source_title: clean(item?.source_title, 260),
-    source_url: clean(item?.source_url, 300)
-  })).filter(item => item.id && item.current_name);
+    id: clean(item?.id, 180),
+    company: normalizeCompanyName(item?.raw_name || item?.company),
+    raw_name: clean(item?.raw_name || item?.company, 220),
+    domain: clean(item?.domain, 240),
+    url: clean(item?.url, 500),
+    country: clean(item?.country, 100),
+    source_title: clean(item?.source_title, 320),
+    source_url: clean(item?.source_url, 500)
+  })).filter(item => item.id && item.company);
 
-  if (!items.length) return Response.json({ names: [] }, { headers: { 'Cache-Control':'no-store' } });
-
-  const fallbackNames = items.map(item => ({ id:item.id, name:item.current_name }));
-  if (!aiConfigured()) {
-    return Response.json({ names:fallbackNames, model:null, fallback:true }, { headers: { 'Cache-Control':'no-store' } });
+  if (!items.length) {
+    return Response.json({ names: [], identities: [], version: IDENTITY_VERSION }, { headers: { 'Cache-Control':'no-store' } });
   }
 
-  const prompt = `You clean company names only for a cold-email greeting shaped as: Hi {company} team,
+  const identities = await resolveCompanyIdentities(items);
+  const currentById = new Map(items.map(item => [item.id, item.company]));
+  const names = identities.map(identity => ({
+    id: identity.id,
+    name: identity.status === 'verified' && identity.greeting_name
+      ? identity.greeting_name
+      : currentById.get(identity.id) || '',
+    status: identity.status,
+    confidence: Number(identity.confidence || 0),
+    evidence_url: identity.evidence_url || ''
+  }));
 
-For each input, return the real organization or brand name in its shortest natural form.
-- Keep an already clean company name unchanged.
-- Remove event years, activation labels, page/list words, categories, slogans, descriptions, and marketing copy.
-- When the evidence contains an event/title plus the actual host or company, choose the actual host/company.
-- Do not add "team", "company", greetings, punctuation, explanations, or guesses unsupported by the evidence.
-- Preserve official capitalization when clear.
-
-Required examples:
-- "KAST Events List" -> "KAST"
-- "ETHNYC 2026 Activations · FORKOFF" -> "FORKOFF"
-- "ium Labs: Korea Crypto Marketing Agency & Web3 GTM" -> "ium Labs"
-- "Changelly" -> "Changelly"
-
-Return only this JSON shape:
-{"items":[{"id":"same input id","name":"short company name"}]}
-
-Inputs:
-${JSON.stringify(items)}`;
-
-  try {
-    const result = await chatJson({ prompt, maxTokens: 1200, timeoutMs: 30000, temperature: 0, hardDeadlineMs: 45000 });
-    const rows = Array.isArray(result?.data?.items) ? result.data.items : [];
-    const aiNames = new Map(rows.map(row => [clean(row?.id, 160), normalizeCompanyName(row?.name)]).filter(([id, name]) => id && name));
-    const names = items.map(item => ({
-      id:item.id,
-      name:normalizeCompanyName(aiNames.get(item.id) || item.current_name)
-    }));
-    return Response.json({ names, model: result.model || null }, { headers: { 'Cache-Control':'no-store' } });
-  } catch (error) {
-    return Response.json({
-      names:fallbackNames,
-      model:null,
-      fallback:true,
-      warning:safeError(error?.message || '회사명 검증 실패')
-    }, { headers: { 'Cache-Control':'no-store' } });
-  }
+  return Response.json({
+    names,
+    identities,
+    version: IDENTITY_VERSION,
+    verified: identities.filter(row => row?.status === 'verified').length,
+    needs_review: identities.filter(row => row?.status !== 'verified').length
+  }, { headers: { 'Cache-Control':'no-store' } });
 }
 
 let sentDomainCache = { expiresAt: 0, domains: [] };
