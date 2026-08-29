@@ -123,7 +123,7 @@
     if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
     if (window.__KPA_CAMPAIGN_RUN_CONTROLLER__ && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/kbeauty-runtime-v5.js?v=20260821-single-owner-v5-2';
+      script.src = '/kbeauty-runtime-v5.js?v=20260829-scale-500-v6';
       script.dataset.kbeautyRuntimeV5 = '1';
       document.head.appendChild(script);
       return;
