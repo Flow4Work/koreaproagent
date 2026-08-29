@@ -5,7 +5,7 @@
   const KBEAUTY_MIN = 20;
   const SPECIAL = {
     bcww:{ short:'BCWW', endpoint:'/api/bcww', copy:'BCWW 2026 전용 검색 · 실제 참가 근거 → 해외 회사 → valid 회사 이메일 순서로 검증합니다.' },
-    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo Korea 2026 · 실제 해외 후보를 유지하고 공식 사이트와 회사 이메일 확보를 우선합니다.' },
+    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo 2026 · 해외 후보 · 공식 사이트 · 회사 이메일' },
     wsce:{ short:'WSCE', endpoint:'/api/wsce', copy:'WSCE 2026 전용 검색 · 공식 참가사/직접 참가 증거 → 해외 본체 → valid 회사 이메일 순서로 검증합니다.' },
     education_fair:{ short:'Education Fair', endpoint:'/api/education-fair', copy:'International Education Fair 2026 전용 검색 · 실제 참가기관 → 해외 본체 → valid 이메일 순서로 검증합니다.' }
   };
