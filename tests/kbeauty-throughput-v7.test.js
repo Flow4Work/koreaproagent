@@ -24,6 +24,16 @@ test('domain resolution spends search capacity on Exa and Tavily before Hunter f
   assert.match(resolver, /exaKey \|\| process\.env\.EXA_API_KEY/);
 });
 
+test('exhausted Hunter stops being retried while official web and Tavily remain active', async () => {
+  const contact = await source('lib/kbeauty-fast-contact-v4.js');
+  assert.match(contact, /hunterDisabledUntil/);
+  assert.match(contact, /disableHunterIfLimited/);
+  assert.match(contact, /credit_limited/);
+  assert.match(contact, /const key=clean\(exaKey \|\| process\.env\.EXA_API_KEY/);
+  assert.match(contact, /siteContacts\(domain,company\)/);
+  assert.match(contact, /tavilySiteEmailSearch\(company,domain,country\)/);
+});
+
 test('modified K-Beauty runtime is cache-busted without changing the hunt button contract', async () => {
   const ui = await source('hunt-ui.js');
   const controller = await source('campaign-run-controller.js');
