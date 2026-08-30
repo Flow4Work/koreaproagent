@@ -68,7 +68,7 @@
     if (document.querySelector('script[data-international-event-mode]')) return;
     if (typeof CAMPAIGNS !== 'undefined') {
       const script = document.createElement('script');
-      script.src = '/event-campaigns-mode.js?v=20260815-kbeauty-fast-email-v4';
+      script.src = '/event-campaigns-mode.js?v=20260831-kbeauty-stable-gate-v5';
       script.dataset.internationalEventMode = '1';
       document.head.appendChild(script);
       return;
