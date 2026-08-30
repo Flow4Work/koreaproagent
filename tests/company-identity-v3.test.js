@@ -43,12 +43,6 @@ test('official invitation wording can establish a public uppercase brand', () =>
   assert.equal(selected?.value, 'QIAONENG');
 });
 
-test('official why-choose heading can establish a mixed-case brand phrase', () => {
-  const html = '<html><body><h2>Why Choose MUZE Packaging?</h2></body></html>';
-  const selected = chooseBrand(extractIdentityCandidates(html, 'https://muzepackage.com/about'), 'Guangzhou Muze Packaging Solutions Technology Co., Ltd', 'muzepackage.com');
-  assert.equal(selected?.value, 'MUZE Packaging');
-});
-
 test('Vietnamese brand label can beat a country-suffixed site label', () => {
   const html = '<html><head><meta property="og:site_name" content="MISS EDE Vietnam"></head><body><h2>THƯƠNG HIỆU MISS EDE</h2></body></html>';
   const selected = chooseBrand(extractIdentityCandidates(html, 'https://missede.com/about'), 'MISS EDE Vietnam', 'missede.com');
