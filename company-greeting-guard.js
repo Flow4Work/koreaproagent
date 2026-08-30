@@ -76,8 +76,13 @@
     return (key === stem || (Math.min(key.length, stem.length) >= 5 && (key.includes(stem) || stem.includes(key)))) ? candidate : '';
   }
 
+  function identityRecord(lead = {}) {
+    const identity = lead?.company_identity;
+    return identity && typeof identity === 'object' ? identity : null;
+  }
+
   function identityV3(lead = {}) {
-    const identity = lead?.company_identity || {};
+    const identity = identityRecord(lead);
     return identity?.identity_version === IDENTITY_VERSION ? identity : null;
   }
 
@@ -106,14 +111,14 @@
   }
 
   function canonicalCompanyName(lead = {}) {
-    const identity = identityV3(lead);
+    const identity = identityRecord(lead);
     if (identity) {
       if (identityV3Verified(lead)) return clean(identity.greeting_name || identity.brand_name, 160);
-      // v3 unresolved identities must never be reconstructed from a domain or email.
+      // Once an identity record exists, never reconstruct the brand from a URL/email while v3 is pending or unresolved.
       return clean(lead.company || lead.raw_company || identity.raw_name, 160).replace(/\s+team$/i, '').trim();
     }
 
-    // Compatibility only for legacy leads that have not entered the v3 pipeline yet.
+    // Compatibility only for leads that have never entered the identity pipeline.
     const trusted = trustedExplicitName(lead);
     if (trusted) return trusted;
     const emailHost = emailDomain(primaryEmail(lead));
@@ -153,7 +158,7 @@
 
   function sanitizeLead(lead = {}) {
     if (!lead || typeof lead !== 'object') return lead;
-    const identity = identityV3(lead);
+    const identity = identityRecord(lead);
     const contact = sanitizeContact(lead.contact || null);
     const contacts = Array.isArray(lead.contacts) ? lead.contacts.map(sanitizeContact) : lead.contacts;
 
@@ -164,7 +169,7 @@
       return {
         ...lead,
         company,
-        company_name_source: identityV3Verified(lead) ? 'official-evidence-v3' : 'identity-needs-review-v3',
+        company_name_source: identityV3Verified(lead) ? 'official-evidence-v3' : 'identity-pending-or-needs-review',
         contact,
         contacts
       };
@@ -216,8 +221,8 @@
       for (const [id, draft] of Object.entries(drafts)) {
         const lead = byId.get(id);
         if (!lead || !draft || typeof draft !== 'object') continue;
-        // Only rewrite a v3 greeting after the server has verified the official brand.
-        if (identityV3(lead) && !identityV3Verified(lead)) continue;
+        // Any existing identity record is server-owned; only v3 verified identity can rewrite the greeting.
+        if (identityRecord(lead) && !identityV3Verified(lead)) continue;
         if (typeof draft.body === 'string') {
           const next = rewriteEnglishGreeting(draft.body, lead, false);
           if (next !== draft.body) { draft.body = next; changed = true; }
