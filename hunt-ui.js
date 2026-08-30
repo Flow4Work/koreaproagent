@@ -68,7 +68,7 @@
     if (document.querySelector('script[data-international-event-mode]')) return;
     if (typeof CAMPAIGNS !== 'undefined') {
       const script = document.createElement('script');
-      script.src = '/event-campaigns-mode.js?v=20260831-kbeauty-stable-gate-v5';
+      script.src = '/event-campaigns-mode.js?v=20260831-kbeauty-stable-gate-v6';
       script.dataset.internationalEventMode = '1';
       document.head.appendChild(script);
       return;
@@ -123,7 +123,7 @@
     if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
     if (window.__KPA_CAMPAIGN_RUN_CONTROLLER__ && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/kbeauty-runtime-v5.js?v=20260831-additive-union-v10';
+      script.src = '/kbeauty-runtime-v5.js?v=20260831-additive-union-v11-racefix';
       script.dataset.kbeautyRuntimeV5 = '1';
       document.head.appendChild(script);
       return;
