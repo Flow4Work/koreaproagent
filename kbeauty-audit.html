@@ -142,7 +142,10 @@
     const btn=$('loadBtn');btn.disabled=true;btn.textContent='500 확보 중…';
     $('notice').className='notice';$('notice').textContent='InterCHARM Korea 2026 공식 참가 포털 등에서 후보를 읽는 중입니다. 기존 후보는 유지합니다.';
     try{
-      const r=await fetch('/api/kbeauty-seeds?limit=500',{cache:'no-store'});
+      const r=await fetch('/api/kbeauty',{
+        method:'POST',headers:{'Content-Type':'application/json'},cache:'no-store',
+        body:JSON.stringify({action:'seed_2026',limit:500})
+      });
       const data=await r.json().catch(()=>({}));
       if(!r.ok||!Array.isArray(data.candidates))throw new Error(data?.error||`HTTP ${r.status}`);
       sourceRows=data.candidates;
