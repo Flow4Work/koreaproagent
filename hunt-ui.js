@@ -137,7 +137,7 @@
 (() => {
   if (document.querySelector('script[data-kbeauty-seed-feeder]')) return;
   const script = document.createElement('script');
-  script.src = '/kbeauty-seed-feeder.js?v=20260830-seed-union-v2';
+  script.src = '/kbeauty-seed-feeder.js?v=20260831-seed-union-v4-jina';
   script.dataset.kbeautySeedFeeder = '1';
   document.head.appendChild(script);
 })();
