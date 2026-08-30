@@ -3,7 +3,7 @@
   window.__KPA_KBEAUTY_SEED_FEEDER__ = true;
 
   const QUEUE_KEY = 'kpa.kbeauty.v6.queue';
-  const META_KEY = 'kpa.kbeauty.seed2026.union-v4-jina.meta';
+  const META_KEY = 'kpa.kbeauty.seed2026.union-v5-additive.meta';
   const MAX_QUEUE = 1800;
   const TARGET = 500;
   const RETRY_MS = 3 * 60 * 1000;
@@ -90,7 +90,7 @@
     if (busy || !kbeautyRunning()) return;
 
     const meta = read(META_KEY, {});
-    if (Number(meta?.returned || 0) >= TARGET && Date.now() - Number(meta?.at || 0) < 12 * 60 * 60 * 1000) return;
+    if (existingKeys().size >= TARGET && Date.now() - Number(meta?.at || 0) < 12 * 60 * 60 * 1000) return;
     if (Number(meta?.lastAttempt || 0) && Date.now() - Number(meta.lastAttempt) < RETRY_MS) return;
 
     busy = true;
@@ -113,6 +113,7 @@
         lastAttempt: Date.now(),
         returned: data.candidates.length,
         added,
+        accumulated: existingKeys().size,
         source: data?.meta?.official_2026_source || 'official_2026_sources'
       };
       localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
