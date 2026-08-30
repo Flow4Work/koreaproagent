@@ -274,6 +274,7 @@
 
   async function resolveQueueBatch() {
     const now=Date.now(), rows=queue();
+    const originalIds=new Set(rows.map(item=>clean(item?.id,180)).filter(Boolean));
     const batch=rows.filter(item=>Number(item.kbeauty_v6_domain_attempts||0)<MAX_DOMAIN_ATTEMPTS&&Number(item.kbeauty_v6_retry_at||0)<=now).slice(0,DOMAIN_PER_RUN);
     if(!batch.length) return {checked:0,resolved:0,verified:0};
     const tools=typeof toolKeys==='function'?toolKeys():{};
@@ -311,7 +312,11 @@
       if(Number(item.kbeauty_v6_domain_attempts||0)>=MAX_DOMAIN_ATTEMPTS) { rejected.add(companyKey(item.company)); continue; }
       remaining.push(item);
     }
-    saveRejected(rejected); saveQueue(remaining); saveRender();
+    const concurrentAdds=queue().filter(item=>{
+      const id=clean(item?.id,180);
+      return id&&!originalIds.has(id);
+    });
+    saveRejected(rejected); saveQueue([...concurrentAdds,...remaining]); saveRender();
     if(verifiedCount&&typeof globalThis.KPA_COMPANY_IDENTITY_REFRESH==='function'){
       try{await globalThis.KPA_COMPANY_IDENTITY_REFRESH();}catch{}
     }
