@@ -7,7 +7,8 @@
     {"source": "/api/email/auth-start", "destination": "/api/gmail?action=auth"},
     {"source": "/api/email/send", "destination": "/api/gmail"},
     {"source": "/api/discover-clients", "destination": "/api/discover"},
-    {"source": "/api/discover-v2", "destination": "/api/discover"}
+    {"source": "/api/discover-v2", "destination": "/api/discover"},
+    {"source": "/api/health", "destination": "/api/contact?action=health"}
   ],
   "headers": [
     {
@@ -30,7 +31,6 @@
     "api/education-fair.js": {"maxDuration": 120},
     "api/contact.js": {"maxDuration": 120},
     "api/find-contacts.js": {"maxDuration": 120},
-    "api/deleted.js": {"maxDuration": 30},
-    "api/health.js": {"maxDuration": 15}
+    "api/deleted.js": {"maxDuration": 30}
   }
 }

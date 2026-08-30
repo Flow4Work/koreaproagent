@@ -24,13 +24,15 @@ test('Vercel Hobby serverless function budget stays within limit', async () => {
   );
 });
 
-test('legacy discovery aliases are rewrites, not extra serverless functions', async () => {
+test('legacy aliases and health are rewrites, not extra serverless functions', async () => {
   const functions = await apiFunctions();
   assert.equal(functions.includes('discover-clients.js'), false);
   assert.equal(functions.includes('discover-v2.js'), false);
+  assert.equal(functions.includes('health.js'), false);
 
   const config = JSON.parse(await readFile(vercelPath, 'utf8'));
   const rewrites = new Map((config.rewrites || []).map(item => [item.source, item.destination]));
   assert.equal(rewrites.get('/api/discover-clients'), '/api/discover');
   assert.equal(rewrites.get('/api/discover-v2'), '/api/discover');
+  assert.equal(rewrites.get('/api/health'), '/api/contact?action=health');
 });

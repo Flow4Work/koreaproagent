@@ -72,7 +72,7 @@ ${KPA_MAIL_SIGNATURE_KO}`
 (() => {
   if (!document.querySelector('script[data-company-identity-runtime]')) {
     const identityScript = document.createElement('script');
-    identityScript.src = '/company-name-llm.js?v=20260829-company-identity-v1';
+    identityScript.src = '/company-name-llm.js?v=20260830-company-identity-v3';
     identityScript.dataset.companyIdentityRuntime = '1';
     document.head.appendChild(identityScript);
   }
