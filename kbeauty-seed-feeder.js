@@ -116,3 +116,54 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
 })();
+
+(() => {
+  if (window.__KPA_KBEAUTY_CALM_UI__) return;
+  window.__KPA_KBEAUTY_CALM_UI__ = true;
+
+  const isKBeauty = () => {
+    try { return typeof state !== 'undefined' && state.currentCampaign === 'kbeauty'; }
+    catch { return false; }
+  };
+  const isRunning = () => {
+    try { return Boolean(state.auto && state.autoCampaign === 'kbeauty'); }
+    catch { return false; }
+  };
+
+  function restoreButtonState() {
+    if (!isKBeauty()) return;
+    const button = document.getElementById('runBtn');
+    if (!button) return;
+    button.disabled = false;
+    button.classList.remove('auto-ready', 'hunting');
+    if (isRunning()) {
+      button.textContent = '진정시키기';
+      button.classList.add('hunting');
+    } else {
+      button.textContent = '자동사냥';
+      button.classList.add('auto-ready');
+    }
+
+    const live = document.querySelector('#summary .hunt-live');
+    if (live) live.textContent = isRunning() ? '자동사냥 중' : '';
+  }
+
+  const start = () => {
+    restoreButtonState();
+    const button = document.getElementById('runBtn');
+    const summary = document.getElementById('summary');
+    const campaign = document.getElementById('campaignSelect');
+    if (button) new MutationObserver(() => requestAnimationFrame(restoreButtonState)).observe(button, { childList: true, characterData: true, subtree: true, attributes: true });
+    if (summary) new MutationObserver(() => requestAnimationFrame(restoreButtonState)).observe(summary, { childList: true, characterData: true, subtree: true });
+    campaign?.addEventListener('change', () => setTimeout(restoreButtonState, 0), true);
+    document.addEventListener('click', event => {
+      if (!event.target?.closest?.('#runBtn')) return;
+      setTimeout(restoreButtonState, 0);
+      setTimeout(restoreButtonState, 120);
+    }, true);
+    setInterval(restoreButtonState, 500);
+  };
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+  else start();
+})();
