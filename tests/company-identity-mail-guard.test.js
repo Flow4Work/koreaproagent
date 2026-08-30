@@ -6,16 +6,20 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const reviewHtml = path.join(root, 'mail-review.html');
+const runtimePath = path.join(root, 'company-name-llm.js');
 const guardPath = path.join(root, 'company-identity-mail-guard.js');
 const greetingGuardPath = path.join(root, 'company-greeting-guard.js');
 
 async function source(file) { return readFile(file, 'utf8'); }
 
-test('mail review keeps identity naming but does not load the send-blocking identity guard', async () => {
+test('mail review keeps identity naming but does not load either identity send blocker', async () => {
   const html = await source(reviewHtml);
-  assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-company-identity-v4/);
+  assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-mail-review-sendfix-v1/);
   assert.doesNotMatch(html, /company-identity-mail-guard\.js/);
-  assert.ok(html.indexOf('company-name-llm.js?v=20260830-company-identity-v4') < html.indexOf('mail-templates.js?v=20260830-company-identity-v4'));
+  assert.ok(html.indexOf('company-name-llm.js?v=20260830-mail-review-sendfix-v1') < html.indexOf('mail-templates.js?v=20260830-company-identity-v4'));
+
+  const runtime = await source(runtimePath);
+  assert.match(runtime, /if \(\/mail-review\/i\.test\(location\.pathname\)\) return;\s*\n\s*const button = event\.target\?\.closest\?\.\('#sendAllBtn'\)/);
 });
 
 test('identity validation never silently unchecks mail review companies', async () => {
