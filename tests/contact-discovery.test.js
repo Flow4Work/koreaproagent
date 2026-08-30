@@ -14,8 +14,8 @@ test('직무가 맞는 유효 개인 이메일은 75점 이상으로 통과한�
     title: 'Events Director',
     email: 'alex@example.com',
     confidence: 'valid',
-    provider: 'hunter',
-    sources: ['hunter.io']
+    provider: 'public_web',
+    sources: ['https://example.com/team']
   }], 'Events Lead', ['Events Lead', 'Partnerships Lead'], 'example.com');
   assert.equal(contacts.length, 1);
   assert.equal(contacts[0].qualified, true);
@@ -26,8 +26,8 @@ test('검증된 역할 대표메일은 개인 이메일이 없을 때 통과한�
   const contacts = normalizeContacts([{
     email: 'events@example.com',
     confidence: 'valid',
-    provider: 'hunter',
-    sources: ['hunter.io']
+    provider: 'public_web',
+    sources: ['https://example.com/contact']
   }], 'Events Lead', ['Events Lead'], 'example.com');
   assert.equal(contacts[0].qualified, true);
   assert.ok(contacts[0].score >= 75);
@@ -35,35 +35,25 @@ test('검증된 역할 대표메일은 개인 이메일이 없을 때 통과한�
 
 test('지원메일과 invalid 이메일은 최종 담당자로 통과하지 않는다', () => {
   const contacts = normalizeContacts([
-    { email: 'support@example.com', confidence: 'valid', provider: 'hunter', sources: ['hunter.io'] },
-    { email: 'bad@example.com', confidence: 'invalid', provider: 'hunter', sources: ['hunter.io'] }
+    { email: 'support@example.com', confidence: 'valid', provider: 'public_web', sources: ['https://example.com/contact'] },
+    { email: 'bad@example.com', confidence: 'invalid', provider: 'public_web', sources: ['https://example.com/contact'] }
   ], 'Events Lead', ['Events Lead'], 'example.com');
   assert.equal(contacts.some(contact => contact.email === 'bad@example.com'), false);
   assert.equal(contacts.find(contact => contact.email === 'support@example.com')?.qualified, false);
 });
 
-test('공개 페이지와 Hunter의 동일 이메일 근거를 합쳐 점수화한다', async () => {
+test('Hunter 환경변수가 있어도 Hunter API를 절대 호출하지 않는다', async () => {
   const previousFetch = globalThis.fetch;
   const previousHunter = process.env.HUNTER_API_KEY;
   const previousJina = process.env.JINA_API_KEY;
   process.env.HUNTER_API_KEY = 'hunter-test-key';
   delete process.env.JINA_API_KEY;
   clearContactCache();
+  const requested = [];
 
   globalThis.fetch = async urlValue => {
     const url = String(urlValue);
-    if (url.startsWith('https://api.hunter.io/v2/domain-search')) {
-      return new Response(JSON.stringify({ data: { emails: [{
-        value: 'events@example.com',
-        type: 'generic',
-        confidence: 96,
-        verification: { status: 'valid' },
-        sources: [{ uri: 'https://example.com/contact' }]
-      }] } }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }
-    if (url.startsWith('https://api.hunter.io/v2/email-verifier')) {
-      return new Response(JSON.stringify({ data: { status: 'valid', score: 96 } }), { status: 200, headers: { 'content-type': 'application/json' } });
-    }
+    requested.push(url);
     if (url === 'https://example.com/') {
       return new Response('<a href="/contact">Contact</a> events@example.com', { status: 200, headers: { 'content-type': 'text/html' } });
     }
@@ -80,12 +70,10 @@ test('공개 페이지와 Hunter의 동일 이메일 근거를 합쳐 점수화�
       minQualified: 1,
       maxContacts: 4
     });
-    const contact = result.emails.find(item => item.email === 'events@example.com');
-    assert.equal(result.qualifiedCount, 1);
-    assert.equal(contact?.qualified, true);
-    assert.ok(contact?.providers.includes('public_web'));
-    assert.ok(contact?.providers.includes('hunter'));
-    assert.ok(contact?.sources.length >= 2);
+    assert.equal(requested.some(url => url.includes('api.hunter.io')), false);
+    assert.equal(result.providerStatus.hunter, false);
+    assert.ok(result.attempts.some(row => row.provider === 'hunter' && row.reason === 'disabled'));
+    assert.ok(result.emails.some(item => item.email === 'events@example.com'));
   } finally {
     globalThis.fetch = previousFetch;
     if (previousHunter === undefined) delete process.env.HUNTER_API_KEY; else process.env.HUNTER_API_KEY = previousHunter;
@@ -94,14 +82,14 @@ test('공개 페이지와 Hunter의 동일 이메일 근거를 합쳐 점수화�
   }
 });
 
-test('공급자 상태에 Jina와 Hunter가 포함된다', () => {
+test('공급자 상태에서 Hunter는 키 존재 여부와 무관하게 정지 상태다', () => {
   const previousHunter = process.env.HUNTER_API_KEY;
   const previousJina = process.env.JINA_API_KEY;
   process.env.HUNTER_API_KEY = 'hunter-test-key';
   process.env.JINA_API_KEY = 'jina-test-key';
   try {
     const status = contactProviderStatus();
-    assert.equal(status.hunter, true);
+    assert.equal(status.hunter, false);
     assert.equal(status.jina, true);
     assert.equal(status.publicWeb, true);
   } finally {
