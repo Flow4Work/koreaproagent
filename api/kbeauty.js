@@ -3,6 +3,7 @@ import {
   buildGlobalExclusions, clean, fetchPage, isKoreanCountry, mapLimit, normalizeCompanyKey,
   rootHost, textMatchesCompany, verifyForeignEntity
 } from '../lib/international-event-campaign.js';
+import { collectOfficial2026Seeds } from '../lib/kbeauty-seeds-2026.js';
 
 const EVENT = { name:'K-Beauty Expo Korea 2026', dates:'2026-10-15–2026-10-17', venue:'KINTEX, Goyang, Korea' };
 const TAVILY_URL = 'https://api.tavily.com/search';
@@ -271,6 +272,18 @@ export async function POST(request) {
   let body={};
   try{body=await request.json();}catch{return Response.json({error:'요청 형식이 잘못됐습니다.'},{status:400});}
   try{
+    if(body.action==='seed_2026') {
+      const limit=Math.max(1,Math.min(500,Number(body.limit)||500));
+      const candidates=await collectOfficial2026Seeds(limit);
+      return Response.json({
+        campaign:'kbeauty',candidates,
+        meta:{
+          requested:limit,returned:candidates.length,
+          official_2026_source:'InterCHARM Korea 2026 official exhibitor portal',
+          rule:'Source-backed 2026 candidates only. Existing downstream foreign-entity, official-domain, Company Identity and email checks remain mandatory.'
+        }
+      },{headers:{'Cache-Control':'no-store'}});
+    }
     if(body.action==='verify_candidates') {
       const verified=await verifyCandidates(body);
       return Response.json(verified,{headers:{'Cache-Control':'no-store'}});
