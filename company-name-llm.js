@@ -56,7 +56,8 @@
     return mergeContacts([
       lead.contact,
       ...(Array.isArray(lead.contacts) ? lead.contacts : []),
-      ...(Array.isArray(lead.contact_candidates) ? lead.contact_candidates : [])
+      ...(Array.isArray(lead.contact_candidates) ? lead.contact_candidates : []),
+      ...(Array.isArray(lead.discovered_contacts) ? lead.discovered_contacts : [])
     ]);
   }
 
@@ -66,6 +67,18 @@
       || rows.find(row => !FREE_MAIL.has(rootDomain(row.email)))
       || rows[0];
     return clean(preferred?.email, 240).toLowerCase();
+  }
+
+  function anchorForLead(lead = {}) {
+    const email = primaryEmail(lead);
+    const emailDomain = rootDomain(email);
+    if (email && emailDomain && !FREE_MAIL.has(emailDomain)) {
+      return { email, domain: emailDomain, source: 'recipient_email' };
+    }
+    const leadDomain = rootDomain(lead.domain || lead.url || '');
+    return leadDomain && !FREE_MAIL.has(leadDomain)
+      ? { email: '', domain: leadDomain, source: 'precontact_domain' }
+      : { email: '', domain: '', source: '' };
   }
 
   function identityVerified(identity = {}) {
@@ -123,44 +136,52 @@
     return changed;
   }
 
-  function applyIdentity(lead, identity, recipientEmail, draftsByKey) {
-    if (!lead || !identity) return false;
+  function applyIdentity(lead, identity, anchor, draftsByKey) {
+    if (!lead || !identity || !anchor?.domain) return false;
     const before = JSON.stringify({
       company: lead.company, domain: lead.domain, url: lead.url, contact: lead.contact, contacts: lead.contacts,
       candidates: lead.contact_candidates, identity: lead.company_identity
     });
 
     lead.raw_company = clean(lead.raw_company || lead.company, 220);
-    lead.company_identity = { ...identity, recipient_email: recipientEmail };
+    lead.company_identity = {
+      ...identity,
+      recipient_email: anchor.email,
+      anchor_source: anchor.source,
+      recipient_domain: rootDomain(identity.recipient_domain || anchor.domain)
+    };
     lead.company_identity_version = VERSION;
     lead.identity_status = identity.status || 'needs_review';
     lead.identity_confidence = Number(identity.confidence || 0);
     lead.identity_evidence_url = clean(identity.evidence_url, 600);
     lead.identity_verified_at = clean(identity.verified_at, 80);
 
-    if (identityVerified(identity)) {
-      const recipientDomain = rootDomain(identity.recipient_domain);
-      const greeting = clean(identity.greeting_name, 120);
-      const allowedContacts = allContacts(lead).filter(contact => contactAllowed(contact, identity));
+    if (identityVerified(lead.company_identity)) {
+      const recipientDomain = rootDomain(lead.company_identity.recipient_domain);
+      const greeting = clean(lead.company_identity.greeting_name, 120);
+      const allowedContacts = allContacts(lead).filter(contact => contactAllowed(contact, lead.company_identity));
+      const finalByEmail = anchor.source === 'recipient_email';
 
-      lead.legal_name = clean(identity.legal_name, 220);
-      lead.brand_name = clean(identity.brand_name || greeting, 160);
+      lead.legal_name = clean(lead.company_identity.legal_name, 220);
+      lead.brand_name = clean(lead.company_identity.brand_name || greeting, 160);
       lead.greeting_name = greeting;
       lead.company = greeting;
       lead.domain = recipientDomain;
-      lead.website_domain = rootDomain(identity.domain || recipientDomain);
-      lead.url = clean(identity.evidence_url, 600) || `https://${recipientDomain}/`;
-      lead.company_name_source = 'recipient-email-domain-v5';
-      lead.verified_by = 'recipient-email-domain-v5';
+      lead.website_domain = rootDomain(lead.company_identity.domain || recipientDomain);
+      lead.url = clean(lead.company_identity.evidence_url, 600) || `https://${recipientDomain}/`;
+      lead.company_name_source = finalByEmail ? 'recipient-email-domain-v5' : 'precontact-domain-v5';
+      lead.verified_by = finalByEmail ? 'recipient-email-domain-v5' : 'precontact-domain-v5';
       lead.contact_candidates = allowedContacts;
       lead.contacts = allowedContacts;
       lead.contact = allowedContacts.find(contact => contact.qualified === true) || allowedContacts[0] || null;
       lead.contact_status = lead.contact ? 'qualified' : 'identity_verified_no_contact';
-      lead.contact_failure_reason = lead.contact ? null : '수신 이메일 도메인과 회사 Identity가 일치하는 연락처가 없습니다.';
+      lead.contact_failure_reason = lead.contact ? null : '현재 회사 도메인과 일치하는 연락처를 아직 확보하지 못했습니다.';
 
       for (const drafts of Object.values(draftsByKey)) updateDraft(lead, drafts, allowedContacts);
     } else {
-      lead.company_name_source = 'recipient-email-domain-needs-review-v5';
+      lead.company_name_source = anchor.source === 'recipient_email'
+        ? 'recipient-email-domain-needs-review-v5'
+        : 'precontact-domain-needs-review-v5';
     }
 
     const after = JSON.stringify({
@@ -177,20 +198,28 @@
     const leads = load(LEADS_KEY, []);
     if (!Array.isArray(leads) || !leads.length) return { verified: 0, unresolved: 0, ids: [] };
 
+    const targetAnchors = new Map();
     const targets = leads.filter(lead => {
       if (!lead?.id || (requested.size && !requested.has(lead.id))) return false;
-      const email = primaryEmail(lead);
-      const domain = rootDomain(email);
-      if (!email || !domain || FREE_MAIL.has(domain)) return false;
+      const anchor = anchorForLead(lead);
+      if (!anchor.domain) return false;
+      targetAnchors.set(lead.id, anchor);
       const storedEmail = clean(lead?.company_identity?.recipient_email, 240).toLowerCase();
-      return force || lead.company_identity_version !== VERSION || !identityVerified(lead.company_identity) || storedEmail !== email;
+      const storedDomain = rootDomain(lead?.company_identity?.recipient_domain || '');
+      const storedSource = clean(lead?.company_identity?.anchor_source, 40);
+      return force
+        || lead.company_identity_version !== VERSION
+        || !identityVerified(lead.company_identity)
+        || storedEmail !== anchor.email
+        || storedDomain !== anchor.domain
+        || storedSource !== anchor.source;
     }).slice(0, 30);
 
     if (!targets.length) {
       const selected = requested.size ? leads.filter(lead => requested.has(lead.id)) : leads;
       return {
         verified: selected.filter(lead => identityVerified(lead.company_identity)).length,
-        unresolved: selected.filter(lead => primaryEmail(lead) && !identityVerified(lead.company_identity)).length,
+        unresolved: selected.filter(lead => anchorForLead(lead).domain && !identityVerified(lead.company_identity)).length,
         ids: selected.map(lead => lead.id)
       };
     }
@@ -203,16 +232,15 @@
       body: JSON.stringify({
         action: 'company_names',
         items: targets.map(lead => {
-          const email = primaryEmail(lead);
-          const domain = rootDomain(email);
+          const anchor = targetAnchors.get(lead.id) || anchorForLead(lead);
           return {
             id: lead.id,
             company: clean(lead.raw_company || lead.company, 220),
             raw_name: clean(lead.raw_company || lead.company, 220),
-            domain,
-            url: `https://${domain}/`,
-            country: clean(lead.country, 100),
-            source_title: `Recipient email: ${email}`,
+            domain: anchor.domain,
+            url: `https://${anchor.domain}/`,
+            country: clean(lead.country || lead.team_origin_country, 100),
+            source_title: anchor.email ? `Recipient email: ${anchor.email}` : `Pre-contact domain: ${anchor.domain}`,
             source_url: clean(lead.source_url, 500)
           };
         })
@@ -227,8 +255,9 @@
 
     for (const lead of leads) {
       const identity = identities.get(clean(lead?.id, 180));
-      if (!identity) continue;
-      if (applyIdentity(lead, identity, primaryEmail(lead), draftsByKey)) changed = true;
+      const anchor = targetAnchors.get(lead?.id);
+      if (!identity || !anchor) continue;
+      if (applyIdentity(lead, identity, anchor, draftsByKey)) changed = true;
     }
 
     save(LEADS_KEY, leads);
@@ -246,7 +275,7 @@
     const selected = requested.size ? leads.filter(lead => requested.has(lead.id)) : targets;
     return {
       verified: selected.filter(lead => identityVerified(lead.company_identity)).length,
-      unresolved: selected.filter(lead => primaryEmail(lead) && !identityVerified(lead.company_identity)).length,
+      unresolved: selected.filter(lead => anchorForLead(lead).domain && !identityVerified(lead.company_identity)).length,
       ids: selected.map(lead => lead.id)
     };
   }
@@ -285,6 +314,17 @@
       };
       wrapped.__emailIdentityV5 = true;
       patchLead = wrapped;
+      found = true;
+    }
+    if (typeof saveState === 'function' && !saveState.__emailIdentityV5) {
+      const original = saveState;
+      const wrapped = function() {
+        const result = original.apply(this, arguments);
+        schedule();
+        return result;
+      };
+      wrapped.__emailIdentityV5 = true;
+      saveState = wrapped;
       found = true;
     }
     if (!found && attempt < 8) setTimeout(() => wrapLeadMutations(attempt + 1), 250);
