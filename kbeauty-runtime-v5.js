@@ -8,8 +8,9 @@
   const MAX_PROSPECTS = 1800;
   const MAX_STATE_LEADS = 1800;
   const MAX_QUEUE = 1800;
-  const DOMAIN_PER_RUN = 12;
-  const CONTACT_PER_RUN = 12;
+  const DOMAIN_PER_RUN = 18;
+  const CONTACT_PER_RUN = 18;
+  const DISCOVERY_QUEUE_FLOOR = 80;
   const MAX_DOMAIN_ATTEMPTS = 3;
   const MAX_CONTACT_ATTEMPTS = 4;
   const QUEUE_KEY = 'kpa.kbeauty.v6.queue';
@@ -222,6 +223,7 @@
     const c=counts();
     if(c.sendable>=TARGET_SENDABLE) return {added:0,lane:'target_reached'};
     if(c.total+c.queue>=MAX_PROSPECTS) return {added:0,lane:'prospect_cap'};
+    if(c.queue>=DISCOVERY_QUEUE_FLOOR) return {added:0,lane:'queue_backlog'};
     const cycle=Number(localStorage.getItem(DISCOVERY_CYCLE_KEY)||0)+1;
     localStorage.setItem(DISCOVERY_CYCLE_KEY,String(cycle));
     const blocked=[...blockedDomains()].slice(-1600);
@@ -279,7 +281,7 @@
     const tools=typeof toolKeys==='function'?toolKeys():{};
     let domainResponse=null;
     try{
-      domainResponse=await post('/api/find-contacts',{action:'kbeauty_domains',exaKey:tools.exaKey||'',items:batch.map(item=>({id:item.id,company:item.company,country:item.country||'',domain:'',url:''}))},42000);
+      domainResponse=await post('/api/find-contacts',{action:'kbeauty_domains',exaKey:tools.exaKey||'',items:batch.map(item=>({id:item.id,company:item.company,country:item.country||'',domain:'',url:''}))},62000);
     }catch{}
     const byId=new Map((Array.isArray(domainResponse?.results)?domainResponse.results:[]).map(row=>[row.id,row]));
     const resolved=[];
@@ -295,7 +297,7 @@
       try{
         verifiedResponse=await post('/api/kbeauty',{action:'verify_candidates',excludeDomains:[...blockedDomains()].slice(-1600),items:resolved.map(item=>({
           id:item.id,company:item.company,country:item.country||'',domain:item.domain,url:item.url,evidence_text:item.evidence_text||'',tier:item.tier,score:item.score
-        }))},52000);
+        }))},62000);
       }catch{}
     }
     const verifiedById=new Map((Array.isArray(verifiedResponse?.results)?verifiedResponse.results:[]).map(row=>[row.id,row]));
