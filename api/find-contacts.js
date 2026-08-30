@@ -43,8 +43,8 @@ export async function POST(request) {
     }
   }
 
-  // K-Beauty contact providers are additive: broad search/crawl providers run together,
-  // then scarce enrichment providers only recover what the union still missed.
+  // K-Beauty providers add to one shared result pool. Broad search/crawl runs together,
+  // then NVIDIA and Prospeo recover the remaining misses in parallel instead of gating each other.
   if (body.action === 'kbeauty_fast') {
     try {
       const items = body.items || [];
@@ -54,8 +54,12 @@ export async function POST(request) {
         findKBeautyAdditiveContacts(items, exaKey)
       ]);
       const unionResults = mergeKBeautyContactRows(baseResults, additiveResults);
-      const recoveredResults = await recoverKBeautyContactRows(unionResults, items);
-      const results = await recoverKBeautyContactsWithProspeo(recoveredResults);
+      const [nvidiaResults, prospeoResults] = await Promise.all([
+        recoverKBeautyContactRows(unionResults, items),
+        recoverKBeautyContactsWithProspeo(unionResults)
+      ]);
+      const withNvidia = mergeKBeautyContactRows(unionResults, nvidiaResults);
+      const results = mergeKBeautyContactRows(withNvidia, prospeoResults);
       const providers=providerSummary(results);
       const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match','missing_domain','no_person_match','no_verified_email','temporarily_disabled'].includes(error)));
       if(hardFailures.length) console.warn('[kbeauty_fast] provider failures', JSON.stringify(hardFailures));
@@ -64,7 +68,7 @@ export async function POST(request) {
         hunterConfigured:Boolean(process.env.HUNTER_API_KEY),
         nvidiaConfigured:nvidiaKBeautyConfigured(),
         prospeoConfigured:prospeoConfigured(),
-        meta:{batch_size:Array.isArray(items)?Math.min(items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-additive-union+nvidia+prospeo-recovery'}
+        meta:{batch_size:Array.isArray(items)?Math.min(items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-additive-union+nvidia+prospeo-parallel-recovery'}
       }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       console.error('[kbeauty_fast] fatal', clean(e?.message || e, 400));
