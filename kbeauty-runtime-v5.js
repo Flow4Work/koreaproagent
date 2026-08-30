@@ -10,7 +10,6 @@
   const MAX_QUEUE = 1800;
   const DOMAIN_PER_RUN = 18;
   const CONTACT_PER_RUN = 18;
-  const DISCOVERY_QUEUE_FLOOR = 80;
   const MAX_DOMAIN_ATTEMPTS = 3;
   const MAX_CONTACT_ATTEMPTS = 4;
   const QUEUE_KEY = 'kpa.kbeauty.v6.queue';
@@ -223,7 +222,6 @@
     const c=counts();
     if(c.sendable>=TARGET_SENDABLE) return {added:0,lane:'target_reached'};
     if(c.total+c.queue>=MAX_PROSPECTS) return {added:0,lane:'prospect_cap'};
-    if(c.queue>=DISCOVERY_QUEUE_FLOOR) return {added:0,lane:'queue_backlog'};
     const cycle=Number(localStorage.getItem(DISCOVERY_CYCLE_KEY)||0)+1;
     localStorage.setItem(DISCOVERY_CYCLE_KEY,String(cycle));
     const blocked=[...blockedDomains()].slice(-1600);
@@ -359,9 +357,11 @@
     migrateOnce(); await refreshSentDomains();
     let c=counts();
     saveRender(`K-Beauty v6 · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · Identity 검증 ${c.verified}/${TARGET_VERIFIED} · 적재 ${c.total} · 대기 ${c.queue}`);
-    const discovery=await discoverMore();
-    const resolved=await resolveQueueBatch();
-    const contacts=await recoverContacts(CONTACT_PER_RUN);
+    const [discovery,resolved,contacts]=await Promise.all([
+      discoverMore(),
+      resolveQueueBatch(),
+      recoverContacts(CONTACT_PER_RUN)
+    ]);
     c=counts();
     state.statusText=`K-Beauty v6 · 발송 가능 ${c.sendable}/${TARGET_SENDABLE} · Identity 검증 ${c.verified}/${TARGET_VERIFIED} · 적재 ${c.total} · 대기 ${c.queue} · 이번 회차 후보 +${discovery.added} / 해외검증 +${resolved.verified} / 이메일 +${contacts.found}`;
     if(discovery.error) state.statusText+=` · 검색 오류 ${discovery.error}`;
