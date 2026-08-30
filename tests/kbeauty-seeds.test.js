@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseIntercharmList } from '../api/kbeauty-seeds.js';
+import { parseIntercharmList } from '../lib/kbeauty-seeds-2026.js';
 
 test('extracts named companies from official InterCHARM profile links', () => {
   const html = `
