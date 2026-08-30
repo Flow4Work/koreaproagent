@@ -1,7 +1,7 @@
 (() => {
   if (!document.querySelector('script[data-company-identity-runtime]')) {
     const script = document.createElement('script');
-    script.src = '/company-name-llm.js?v=20260830-company-identity-v3';
+    script.src = '/company-name-llm.js?v=20260830-company-identity-v4';
     script.dataset.companyIdentityRuntime = '1';
     document.head.appendChild(script);
   }
@@ -15,7 +15,7 @@
     const validFormat = /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(email);
     const identity = lead?.company_identity || {};
 
-    if (identity?.identity_version === '20260830-company-identity-v3') {
+    if (identity?.identity_version === '20260830-company-identity-v4') {
       if (identity.status !== 'verified') return false;
       const allowed = globalThis.KPA_COMPANY_CONTACT_ALLOWED;
       if (typeof allowed === 'function') return Boolean(validFormat && allowed(contact, identity));

@@ -11,18 +11,27 @@ const greetingGuardPath = path.join(root, 'company-greeting-guard.js');
 
 async function source(file) { return readFile(file, 'utf8'); }
 
-test('mail review loads identity v3 directly before template bootstrap', async () => {
+test('mail review loads identity v4 directly before template bootstrap', async () => {
   const html = await source(reviewHtml);
-  assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-company-identity-v3/);
-  assert.match(html, /company-identity-mail-guard\.js\?v=20260830-company-identity-v3/);
-  assert.ok(html.indexOf('company-name-llm.js?v=20260830-company-identity-v3') < html.indexOf('mail-templates.js?v=20260830-company-identity-v3'));
+  assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-company-identity-v4/);
+  assert.match(html, /company-identity-mail-guard\.js\?v=20260830-company-identity-v4/);
+  assert.ok(html.indexOf('company-name-llm.js?v=20260830-company-identity-v4') < html.indexOf('mail-templates.js?v=20260830-company-identity-v4'));
 });
 
-test('unverified identities are auto-excluded only from sending', async () => {
+test('identity validation never silently unchecks mail review companies', async () => {
   const text = await source(guardPath);
-  assert.match(text, /draft\.identityAutoExcluded = true/);
-  assert.match(text, /draft\.included = false/);
+  assert.match(text, /restoreLegacyAutoExclusion/);
+  assert.match(text, /draft\.included = true/);
+  assert.doesNotMatch(text, /draft\.included = false/);
+  assert.doesNotMatch(text, /identityAutoExcluded\s*=\s*true/);
   assert.match(text, /contact_candidates/);
+});
+
+test('same-domain qualified or evidenced contacts do not disappear from sendability', async () => {
+  const text = await source(guardPath);
+  assert.match(text, /contact\?\.qualified === true/);
+  assert.match(text, /hasEvidence/);
+  assert.match(text, /providerList\.includes\('hunter'\)/);
 });
 
 test('mail guard uses only server-verified greeting name and never domain-stem guessing', async () => {
@@ -35,5 +44,5 @@ test('mail guard uses only server-verified greeting name and never domain-stem g
 test('legacy greeting compatibility does not override any existing identity record', async () => {
   const text = await source(greetingGuardPath);
   assert.match(text, /Once an identity record exists/);
-  assert.match(text, /identityRecord\(lead\) && !identityV3Verified\(lead\)/);
+  assert.match(text, /identityRecord\(lead\) && !identityCurrentVerified\(lead\)/);
 });

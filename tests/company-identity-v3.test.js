@@ -31,6 +31,30 @@ test('explicit official-site brand declaration can establish a short brand', () 
   assert.equal(selected?.value, 'MISS EDE');
 });
 
+test('official self-description can establish a short uppercase brand without hardcoding it', () => {
+  const html = '<html><body><p>KEYUAN is a designer, developer, producer and seller of cosmetic packaging products.</p></body></html>';
+  const selected = chooseBrand(extractIdentityCandidates(html, 'https://keyuanbottle.com/about'), 'Guangzhou Keyuan Plasticware', 'keyuanbottle.com');
+  assert.equal(selected?.value, 'KEYUAN');
+});
+
+test('official invitation wording can establish a public uppercase brand', () => {
+  const html = '<html><body><p>Come to QIAONENG, own modern cosmetic packaging solutions for your brand.</p></body></html>';
+  const selected = chooseBrand(extractIdentityCandidates(html, 'https://qiaonengpackaging.com/about'), 'Guangzhou Qiaoneng Plastic Product Co.,Ltd', 'qiaonengpackaging.com');
+  assert.equal(selected?.value, 'QIAONENG');
+});
+
+test('official why-choose heading can establish a mixed-case brand phrase', () => {
+  const html = '<html><body><h2>Why Choose MUZE Packaging?</h2></body></html>';
+  const selected = chooseBrand(extractIdentityCandidates(html, 'https://muzepackage.com/about'), 'Guangzhou Muze Packaging Solutions Technology Co., Ltd', 'muzepackage.com');
+  assert.equal(selected?.value, 'MUZE Packaging');
+});
+
+test('Vietnamese brand label can beat a country-suffixed site label', () => {
+  const html = '<html><head><meta property="og:site_name" content="MISS EDE Vietnam"></head><body><h2>THƯƠNG HIỆU MISS EDE</h2></body></html>';
+  const selected = chooseBrand(extractIdentityCandidates(html, 'https://missede.com/about'), 'MISS EDE Vietnam', 'missede.com');
+  assert.equal(selected?.value, 'MISS EDE');
+});
+
 test('legal suffix stripping remains metadata cleanup only', () => {
   assert.equal(stripLegalSuffix('Bulgarian Rose Plc'), 'Bulgarian Rose');
   assert.equal(stripLegalSuffix('PTN Healthcare GmbH'), 'PTN Healthcare');
@@ -56,5 +80,5 @@ test('mail guard no longer guesses brands from a domain stem', async () => {
 test('legacy greeting guard does not infer from domains after any identity record exists', async () => {
   const guard = await source('company-greeting-guard.js');
   assert.match(guard, /Once an identity record exists/);
-  assert.match(guard, /identityRecord\(lead\) && !identityV3Verified\(lead\)/);
+  assert.match(guard, /identityRecord\(lead\) && !identityCurrentVerified\(lead\)/);
 });
