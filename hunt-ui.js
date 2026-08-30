@@ -104,7 +104,7 @@
     if (document.querySelector('script[data-campaign-run-controller]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/campaign-run-controller.js?v=20260830-kbeauty-throughput-v8';
+      script.src = '/campaign-run-controller.js?v=20260831-kbeauty-button-contract-v9';
       script.dataset.campaignRunController = '1';
       document.head.appendChild(script);
       return;
@@ -123,7 +123,7 @@
     if (document.querySelector('script[data-kbeauty-runtime-v5]')) return;
     if (window.__KPA_CAMPAIGN_RUN_CONTROLLER__ && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/kbeauty-runtime-v5.js?v=20260830-backlog-throughput-v7';
+      script.src = '/kbeauty-runtime-v5.js?v=20260831-additive-union-v10';
       script.dataset.kbeautyRuntimeV5 = '1';
       document.head.appendChild(script);
       return;
@@ -137,7 +137,7 @@
 (() => {
   if (document.querySelector('script[data-kbeauty-seed-feeder]')) return;
   const script = document.createElement('script');
-  script.src = '/kbeauty-seed-feeder.js?v=20260831-seed-union-v4-jina';
+  script.src = '/kbeauty-seed-feeder.js?v=20260831-seed-union-v5-additive';
   script.dataset.kbeautySeedFeeder = '1';
   document.head.appendChild(script);
 })();
