@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>K-Beauty 2026 후보 검증</title>
+  <style>
+    :root{font-family:Inter,"Noto Sans KR",system-ui,sans-serif;color:#191f28;background:#f6f7f9}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1500px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:16px}.top h1{margin:0 0 5px;font-size:22px}.top p{margin:0;color:#6b7684;font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap}button,a.btn{border:1px solid #e5e8eb;border-radius:9px;background:#fff;padding:9px 12px;color:#344054;text-decoration:none;font-weight:700;cursor:pointer}.primary{border:0;background:#3182f6;color:#fff}.stats{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.stat{background:#fff;border:1px solid #e5e8eb;border-radius:10px;padding:9px 12px;font-size:12px;color:#6b7684}.stat b{color:#191f28;font-size:14px;margin-left:5px}.notice{margin-bottom:12px;padding:10px 12px;border-radius:10px;background:#fff;border:1px solid #e5e8eb;font-size:12px;color:#4e5968}.notice.bad{border-color:#f2b8ba;color:#b42318}.filters{display:flex;gap:8px;margin-bottom:10px}.filters input,.filters select{border:1px solid #e5e8eb;border-radius:9px;background:#fff;padding:9px 10px}.filters input{flex:1}.table-wrap{background:#fff;border:1px solid #e5e8eb;border-radius:12px;overflow:auto;max-height:72vh}table{width:100%;border-collapse:collapse;font-size:12px}th{position:sticky;top:0;background:#fbfcfd;text-align:left;color:#8b95a1;padding:9px;border-bottom:1px solid #e5e8eb;white-space:nowrap}td{padding:9px;border-bottom:1px solid #eef1f4;vertical-align:top}td.company{font-weight:700;min-width:210px}td.source{min-width:240px}td.status{min-width:130px}small{display:block;color:#8b95a1;margin-top:3px}.pill{display:inline-block;padding:3px 7px;border-radius:999px;background:#f2f4f7;color:#667085;font-weight:700}.ok{background:#eafbf4;color:#087a58}.wait{background:#fff7e6;color:#9a6700}.link{color:#175cd3;text-decoration:none}.empty{text-align:center;padding:45px;color:#8b95a1}@media(max-width:760px){.wrap{padding:12px}.top{display:block}.actions{margin-top:10px}.filters{display:block}.filters>*{width:100%;margin-bottom:6px}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>K-Beauty 2026 후보 검증</h1>
+      <p>공식 2026 행사 근거를 먼저 확보하고, 해외 법인·공식 도메인·Identity·이메일은 기존 엄격 검증을 그대로 거칩니다.</p>
+    </div>
+    <div class="actions">
+      <a class="btn" href="/">메인</a>
+      <button id="exportBtn">CSV</button>
+      <button class="primary" id="loadBtn">공식 후보 500 확보</button>
+    </div>
+  </div>
+
+  <div class="stats" id="stats"></div>
+  <div class="notice" id="notice">아직 공식 후보를 불러오지 않았습니다. 기존 데이터는 삭제하지 않습니다.</div>
+  <div class="filters">
+    <input id="search" placeholder="회사명 / 국가 / 행사 검색" />
+    <select id="statusFilter">
+      <option value="all">전체 상태</option>
+      <option value="verified">Identity 검증</option>
+      <option value="email">이메일 확보</option>
+      <option value="pending">검증 대기</option>
+    </select>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>회사</th><th>행사 / 근거</th><th>국가</th><th>공식 도메인</th><th>Identity</th><th>이메일</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="empty">후보를 불러오면 여기에 2026 근거와 검증 상태가 표시됩니다.</td></tr></tbody>
+    </table>
+  </div>
+</div>
+<script>
+(() => {
+  const QUEUE_KEY='kpa.kbeauty.v6.queue';
+  const LEADS_KEY='kpa.hunt.leads';
+  const MAX_QUEUE=1800;
+  let sourceRows=[];
+
+  const $=id=>document.getElementById(id);
+  const clean=(v='',max=500)=>String(v||'').replace(/\s+/g,' ').trim().slice(0,max);
+  const companyKey=v=>clean(v,180).toLowerCase().replace(/\b(?:inc|llc|ltd|limited|corp|corporation|company|co|gmbh|plc)\b/giu,' ').replace(/[^\p{L}\p{N}]+/gu,' ').replace(/\s+/g,' ').trim();
+  const read=(key,fallback=[])=>{try{return JSON.parse(localStorage.getItem(key)||'null')??fallback}catch{return fallback}};
+  const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const safeUrl=v=>{try{const u=new URL(v);return /^https?:$/.test(u.protocol)?u.href:''}catch{return''}};
+  const rootHost=v=>{let raw=clean(v,500).toLowerCase();if(!raw)return'';if(raw.includes('@')&&!raw.includes('://'))raw=raw.split('@').pop()||'';try{raw=new URL(raw.includes('://')?raw:`https://${raw}`).hostname}catch{raw=raw.split('/')[0].split(':')[0]}return raw.replace(/^www\./,'').replace(/\.+$/,'')};
+
+  function leadMap(){
+    const map=new Map();
+    for(const lead of read(LEADS_KEY,[])){
+      if(lead?.campaign!=='kbeauty')continue;
+      const key=companyKey(lead.company);
+      if(key)map.set(key,lead);
+    }
+    return map;
+  }
+
+  function mergedRows(){
+    const leads=leadMap();
+    const queue=read(QUEUE_KEY,[]);
+    const map=new Map();
+    for(const raw of [...sourceRows,...queue]){
+      const key=companyKey(raw?.company);
+      if(!key||map.has(key))continue;
+      map.set(key,{...raw,_lead:leads.get(key)||null});
+    }
+    for(const [key,lead] of leads){
+      if(!map.has(key))map.set(key,{company:lead.company,source_url:lead.source_url,source_event:lead.campaign_label,tier:lead.attendance_tier,_lead:lead});
+    }
+    return [...map.values()];
+  }
+
+  function stateOf(row){
+    const lead=row._lead;
+    const identity=lead?.company_identity||{};
+    const identityOk=identity.status==='verified'&&Number(identity.confidence||0)>=0.85;
+    const email=clean(lead?.contact?.email||lead?.contacts?.find?.(c=>c?.email)?.email||row.public_email||'',240);
+    const domain=rootHost(lead?.domain||lead?.url||row.domain||'');
+    const emailOk=Boolean(identityOk&&email&&domain&&rootHost(email)===domain);
+    return {lead,identity,identityOk,email,emailOk,domain};
+  }
+
+  function stats(){
+    const all=mergedRows();
+    const verified=all.filter(r=>stateOf(r).identityOk).length;
+    const email=all.filter(r=>stateOf(r).emailOk).length;
+    const queue=read(QUEUE_KEY,[]).length;
+    $('stats').innerHTML=`<div class="stat">2026 근거 후보 <b>${all.length}</b></div><div class="stat">Queue <b>${queue}</b></div><div class="stat">Identity <b>${verified}</b></div><div class="stat">검증 이메일 <b>${email}</b></div>`;
+  }
+
+  function render(){
+    const q=clean($('search').value,180).toLowerCase();
+    const filter=$('statusFilter').value;
+    let all=mergedRows();
+    all=all.filter(row=>{
+      const s=stateOf(row);
+      if(q&&!`${row.company||''} ${row.country||''} ${row.source_event||''} ${row.tier||''}`.toLowerCase().includes(q))return false;
+      if(filter==='verified'&&!s.identityOk)return false;
+      if(filter==='email'&&!s.emailOk)return false;
+      if(filter==='pending'&&s.identityOk)return false;
+      return true;
+    });
+    stats();
+    if(!all.length){$('rows').innerHTML='<tr><td colspan="7" class="empty">조건에 맞는 후보가 없습니다.</td></tr>';return;}
+    $('rows').innerHTML=all.map((row,i)=>{
+      const s=stateOf(row),src=safeUrl(row.source_url||s.lead?.source_url||''),country=clean(s.lead?.team_origin_country||row.country||'',80);
+      const event=clean(row.source_event||s.lead?.campaign_label||row.tier||'',120);
+      const evidence=clean(row.evidence_text||s.lead?.signal||'',180);
+      const identityText=s.identityOk?`검증 ${Math.round(Number(s.identity.confidence||0)*100)}%`:'검증 대기';
+      const identityCls=s.identityOk?'pill ok':'pill wait';
+      const emailText=s.email||'미확보';
+      return `<tr><td>${i+1}</td><td class="company">${esc(row.company||'')}<small>${esc(row.tier||s.lead?.attendance_tier||'')}</small></td><td class="source">${src?`<a class="link" target="_blank" rel="noopener" href="${esc(src)}">${esc(event||'근거 보기')}</a>`:esc(event||'')}<small>${esc(evidence)}</small></td><td>${esc(country||'확인 중')}</td><td>${s.domain?`<span>${esc(s.domain)}</span>`:'<span class="pill wait">확인 중</span>'}</td><td class="status"><span class="${identityCls}">${esc(identityText)}</span></td><td>${s.emailOk?`<span class="pill ok">${esc(emailText)}</span>`:esc(emailText)}</td></tr>`;
+    }).join('');
+  }
+
+  function mergeQueue(candidates){
+    const queue=read(QUEUE_KEY,[]), seen=new Set();
+    const next=[];
+    for(const item of [...queue,...candidates]){
+      const key=companyKey(item?.company);
+      if(!key||seen.has(key))continue;
+      seen.add(key);
+      next.push({...item,kbeauty_v6_domain_attempts:Number(item?.kbeauty_v6_domain_attempts||0),kbeauty_v6_retry_at:Number(item?.kbeauty_v6_retry_at||0)});
+      if(next.length>=MAX_QUEUE)break;
+    }
+    localStorage.setItem(QUEUE_KEY,JSON.stringify(next));
+    return Math.max(0,next.length-queue.length);
+  }
+
+  async function loadOfficial(){
+    const btn=$('loadBtn');btn.disabled=true;btn.textContent='500 확보 중…';
+    $('notice').className='notice';$('notice').textContent='InterCHARM Korea 2026 공식 참가 포털 등에서 후보를 읽는 중입니다. 기존 후보는 유지합니다.';
+    try{
+      const r=await fetch('/api/kbeauty-seeds?limit=500',{cache:'no-store'});
+      const data=await r.json().catch(()=>({}));
+      if(!r.ok||!Array.isArray(data.candidates))throw new Error(data?.error||`HTTP ${r.status}`);
+      sourceRows=data.candidates;
+      const added=mergeQueue(sourceRows);
+      const count=sourceRows.length;
+      if(count<500){$('notice').className='notice bad';$('notice').textContent=`공식 소스에서 이번 요청에 ${count}개만 확보했습니다. 500개라고 속이지 않고 그대로 표시합니다. Queue 신규 +${added}.`;}
+      else{$('notice').className='notice';$('notice').textContent=`공식 2026 근거 후보 ${count}개 확보 · Queue 신규 +${added}. 이제 메인 Agent가 해외 법인 → 공식 도메인 → Identity → 이메일 순으로 검증합니다.`;}
+      render();
+    }catch(e){$('notice').className='notice bad';$('notice').textContent=`후보 확보 실패: ${clean(e?.message||e,180)}`;}
+    finally{btn.disabled=false;btn.textContent='공식 후보 500 확보';}
+  }
+
+  function csv(){
+    const rows=mergedRows();
+    const head=['company','source_event','source_url','country','domain','identity_status','identity_confidence','email'];
+    const data=[head,...rows.map(row=>{const s=stateOf(row);return [row.company||'',row.source_event||'',row.source_url||'',s.lead?.team_origin_country||row.country||'',s.domain,s.identity?.status||'pending',s.identity?.confidence||'',s.email||''];})];
+    const text=data.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob=new Blob(['\ufeff'+text],{type:'text/csv;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='kbeauty-2026-audit.csv';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }
+
+  $('loadBtn').addEventListener('click',loadOfficial);
+  $('exportBtn').addEventListener('click',csv);
+  $('search').addEventListener('input',render);
+  $('statusFilter').addEventListener('change',render);
+  render();
+})();
+</script>
+</body>
+</html>
