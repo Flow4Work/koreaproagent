@@ -3,19 +3,50 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseJinaDirectory } from '../lib/kbeauty-jina-seeds.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = file => readFile(path.join(root, file), 'utf8');
 
-test('K-Beauty seed collection uses current 2026 official directories, not the stale legacy bulk list', async () => {
+test('K-Beauty seed collection unions Jina-rendered and Tavily-backed current 2026 directories', async () => {
   const seeds = await source('lib/kbeauty-seeds-2026.js');
+  const jina = await source('lib/kbeauty-jina-seeds.js');
+  assert.match(seeds, /collectJinaOfficial2026Seeds/);
+  assert.match(seeds, /const \[jinaSeeds, intercharmHtml, extracted, inCosmeticsSearch\] = await Promise\.all/);
   assert.match(seeds, /INTERCHARM_MODERN/);
   assert.match(seeds, /INCOSMETICS_2026/);
   assert.match(seeds, /TAVILY_EXTRACT_URL/);
   assert.match(seeds, /TAVILY_CRAWL_URL/);
-  assert.match(seeds, /extract_depth:'advanced'/);
-  assert.match(seeds, /parseMarkdownOfficialDirectory/);
   assert.doesNotMatch(seeds, /exhi_list02\.asp/);
+  assert.match(jina, /JINA_READER_URL = 'https:\/\/r\.jina\.ai\/'/);
+  assert.match(jina, /process\.env\.JINA_API_KEY/);
+  assert.match(jina, /Promise\.all\(SOURCES\.map/);
+});
+
+test('Jina rendered directory parser extracts exhibitor cards but not directory UI labels', () => {
+  const markdown = `
+InterCHARM Korea
+July 1 - 3, 2026
+524 Exhibitors
+Filters
+TINDA
+Professional beauty manufacturer
+Stand A-K32
+Website
+Email
+TUBEST CO., LTD.
+Cosmetic packaging company
+Stand A-H46
+Website
+`;
+  const rows = parseJinaDirectory(markdown, {
+    url:'https://www.intercharmkorea.com/en-us/Exhibitor_directory.html',
+    event:'InterCHARM Korea 2026',
+    score:94,
+    marker:/July\s+1\s*-\s*3,?\s*2026/i
+  });
+  assert.deepEqual(rows.map(row => row.company), ['TINDA','TUBEST CO., LTD.']);
+  assert.ok(rows.every(row => row.seed_provider === 'jina_reader'));
 });
 
 test('broad domain providers contribute in parallel and expose all candidate domains', async () => {
@@ -38,10 +69,12 @@ test('email discovery unions broad providers and runs NVIDIA plus Prospeo recove
   assert.match(additive, /Promise\.all\(\[exaContacts\(item,exaKey\),tavilyContacts\(item\)\]\)/);
 });
 
-test('current 2026 seed feed refreshes without taking ownership of the K-Beauty hunt button', async () => {
+test('Jina seed refresh does not take ownership of the K-Beauty hunt button', async () => {
   const feeder = await source('kbeauty-seed-feeder.js');
   const controller = await source('campaign-run-controller.js');
-  assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v3\.meta/);
+  const huntUi = await source('hunt-ui.js');
+  assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v4-jina\.meta/);
+  assert.match(huntUi, /kbeauty-seed-feeder\.js\?v=20260831-seed-union-v4-jina/);
   assert.doesNotMatch(feeder, /textContent\s*=\s*['"](?:후보 찾기|진정시키기|자동사냥)/);
   assert.match(controller, /id==='kbeauty'\?'진정시키기'/);
   assert.match(controller, /if\(id==='kbeauty'\)\{b\.textContent='후보 찾기'/);
