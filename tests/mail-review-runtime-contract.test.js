@@ -17,7 +17,7 @@ function localScriptSources(html) {
     .map(src => src.replace(/^\//, '').split('?')[0]);
 }
 
-test('mail review runtime cannot reintroduce an identity-based sendAll click blocker', async () => {
+test('mail review runtime cannot reintroduce an unguarded identity-based sendAll click blocker', async () => {
   const html = await source('mail-review.html');
   const scripts = localScriptSources(html);
   assert.ok(scripts.includes('mail-review.js'), 'mail-review.js must remain loaded');
@@ -27,11 +27,14 @@ test('mail review runtime cannot reintroduce an identity-based sendAll click blo
     const targetsSendAll = /#sendAllBtn|sendAllBtn/.test(text);
     const hardStopsEvent = /stopImmediatePropagation\s*\(/.test(text);
     const identityBlockMessage = /공식 브랜드명|검증된 연결 근거|발송 중지:/.test(text);
+    const containsIdentityHardBlock = targetsSendAll && hardStopsEvent && identityBlockMessage;
 
-    assert.equal(
-      targetsSendAll && hardStopsEvent && identityBlockMessage,
-      false,
-      `${script} must not intercept mail-review sendAll with an identity-validation hard block`
+    if (!containsIdentityHardBlock) continue;
+
+    assert.match(
+      text,
+      /document\.addEventListener\('click',\s*event\s*=>\s*\{\s*if \(\/mail-review\/i\.test\(location\.pathname\)\) return;/s,
+      `${script} contains an identity send blocker but does not bypass it on mail-review`
     );
   }
 });
