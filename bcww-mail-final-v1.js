@@ -197,7 +197,6 @@ ${SIGNATURE_KO}`
     const allLeads = load(LEADS_KEY, []);
     const drafts = load(DRAFT_KEY, {});
     const byId = new Map(allLeads.map(lead => [lead.id, lead]));
-    let renamed = false;
     let touched = false;
 
     for (const original of targets) {
@@ -210,14 +209,12 @@ ${SIGNATURE_KO}`
       if (!next || next === safeCompanyName(lead.company) || !supportedCompanyName(next, lead, email)) continue;
       lead.company = next;
       updateDraftGreeting(drafts[lead.id], next);
-      renamed = true;
     }
 
     if (touched) {
       save(LEADS_KEY, allLeads);
       save(DRAFT_KEY, drafts);
     }
-    if (renamed) location.reload();
   }
 
   function signedHtml(body = '') {

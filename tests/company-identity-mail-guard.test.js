@@ -6,20 +6,21 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const reviewHtml = path.join(root, 'mail-review.html');
-const runtimePath = path.join(root, 'company-name-llm.js');
+const templatesPath = path.join(root, 'mail-templates.js');
 const guardPath = path.join(root, 'company-identity-mail-guard.js');
 const greetingGuardPath = path.join(root, 'company-greeting-guard.js');
 
 async function source(file) { return readFile(file, 'utf8'); }
 
-test('mail review keeps identity naming but does not load either identity send blocker', async () => {
+test('mail review uses stored identity data without loading the background identity runtime', async () => {
   const html = await source(reviewHtml);
-  assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-mail-review-sendfix-v1/);
+  assert.doesNotMatch(html, /company-name-llm\.js/);
   assert.doesNotMatch(html, /company-identity-mail-guard\.js/);
-  assert.ok(html.indexOf('company-name-llm.js?v=20260830-mail-review-sendfix-v1') < html.indexOf('mail-templates.js?v=20260830-company-identity-v4'));
+  assert.match(html, /company-greeting-guard\.js/);
 
-  const runtime = await source(runtimePath);
-  assert.match(runtime, /if \(\/mail-review\/i\.test\(location\.pathname\)\) return;\s*\n\s*const button = event\.target\?\.closest\?\.\('#sendAllBtn'\)/);
+  const templates = await source(templatesPath);
+  assert.ok(templates.includes("const isMailReview = /\\/mail-review(?:\\/|$)/i.test(location.pathname);"));
+  assert.ok(templates.includes("if (!isMailReview && !document.querySelector('script[data-company-identity-runtime]'))"));
 });
 
 test('identity validation never silently unchecks mail review companies', async () => {

@@ -92,26 +92,4 @@
     const card = event.target?.closest?.('.mail-card');
     if (card) rememberRenderedCard(card.dataset.index);
   });
-
-  // Mail review must not be blocked by the separate company-identity validation layer.
-  // Keep that layer intact elsewhere; bypass only its document-capture sendAll interception on this page.
-  let bypassButton = null;
-  window.addEventListener('click', event => {
-    const button = event.target?.closest?.('#sendAllBtn');
-    if (!button) return;
-    bypassButton = button;
-    button.id = 'sendAllBtnMailReview';
-    queueMicrotask(() => {
-      if (bypassButton === button) {
-        button.id = 'sendAllBtn';
-        bypassButton = null;
-      }
-    });
-  }, true);
-
-  document.querySelector('.review-actions')?.addEventListener('click', () => {
-    if (!bypassButton) return;
-    bypassButton.id = 'sendAllBtn';
-    bypassButton = null;
-  }, true);
 })();
