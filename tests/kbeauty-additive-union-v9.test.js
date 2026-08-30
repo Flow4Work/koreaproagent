@@ -71,12 +71,27 @@ test('email discovery unions broad providers and runs NVIDIA plus Prospeo recove
   assert.match(additive, /Promise\.all\(\[exaContacts\(item,exaKey\),tavilyContacts\(item\)\]\)/);
 });
 
-test('Jina seed refresh does not take ownership of the K-Beauty hunt button', async () => {
+test('K-Beauty auto cycle searches, resolves and enriches additively even with a queue backlog', async () => {
+  const runtime = await source('kbeauty-runtime-v5.js');
+  assert.doesNotMatch(runtime, /DISCOVERY_QUEUE_FLOOR/);
+  assert.doesNotMatch(runtime, /lane:'queue_backlog'/);
+  assert.match(runtime, /const \[discovery,resolved,contacts\]=await Promise\.all\(\[/);
+  assert.match(runtime, /discoverMore\(\)/);
+  assert.match(runtime, /resolveQueueBatch\(\)/);
+  assert.match(runtime, /recoverContacts\(CONTACT_PER_RUN\)/);
+});
+
+test('seed refresh uses actual accumulated K-Beauty pool and never owns the hunt button', async () => {
   const feeder = await source('kbeauty-seed-feeder.js');
   const controller = await source('campaign-run-controller.js');
   const huntUi = await source('hunt-ui.js');
-  assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v4-jina\.meta/);
-  assert.match(huntUi, /kbeauty-seed-feeder\.js\?v=20260831-seed-union-v4-jina/);
+  const index = await source('index.html');
+  assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v5-additive\.meta/);
+  assert.match(feeder, /existingKeys\(\)\.size >= TARGET/);
+  assert.match(huntUi, /campaign-run-controller\.js\?v=20260831-kbeauty-button-contract-v9/);
+  assert.match(huntUi, /kbeauty-runtime-v5\.js\?v=20260831-additive-union-v10/);
+  assert.match(huntUi, /kbeauty-seed-feeder\.js\?v=20260831-seed-union-v5-additive/);
+  assert.match(index, /hunt-ui\.js\?v=20260831-kbeauty-additive-v10/);
   assert.doesNotMatch(feeder, /textContent\s*=\s*['"](?:후보 찾기|진정시키기|자동사냥)/);
   assert.match(controller, /id==='kbeauty'\?'진정시키기'/);
   assert.match(controller, /if\(id==='kbeauty'\)\{b\.textContent='후보 찾기'/);
