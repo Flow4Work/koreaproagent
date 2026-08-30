@@ -1,6 +1,7 @@
 import { contactDiscoveryConfigured as hunterConfigured, findContacts, normalizeContacts } from '../lib/contact-discovery.js';
 import { findKBeautyContactsFast } from '../lib/kbeauty-fast-contact-v4.js';
 import { nvidiaKBeautyConfigured, recoverKBeautyContactRows } from '../lib/kbeauty-nvidia-recovery.js';
+import { prospeoConfigured, recoverKBeautyContactsWithProspeo } from '../lib/kbeauty-prospeo-recovery.js';
 import { resolveKBeautyDomainsV5 } from '../lib/kbeauty-domain-resolver-v5.js';
 
 function clean(v, max = 200) { return typeof v === 'string' ? v.trim().slice(0, max) : '' }
@@ -45,15 +46,17 @@ export async function POST(request) {
   if (body.action === 'kbeauty_fast') {
     try {
       const baseResults = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
-      const results = await recoverKBeautyContactRows(baseResults, body.items || []);
+      const recoveredResults = await recoverKBeautyContactRows(baseResults, body.items || []);
+      const results = await recoverKBeautyContactsWithProspeo(recoveredResults);
       const providers=providerSummary(results);
-      const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match','missing_domain'].includes(error)));
+      const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match','missing_domain','no_person_match','no_verified_email','temporarily_disabled'].includes(error)));
       if(hardFailures.length) console.warn('[kbeauty_fast] provider failures', JSON.stringify(hardFailures));
       return Response.json({
         results,
         hunterConfigured:Boolean(process.env.HUNTER_API_KEY),
         nvidiaConfigured:nvidiaKBeautyConfigured(),
-        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-v4+nvidia-recovery'}
+        prospeoConfigured:prospeoConfigured(),
+        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-v4+nvidia+prospeo-recovery'}
       }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       console.error('[kbeauty_fast] fatal', clean(e?.message || e, 400));
