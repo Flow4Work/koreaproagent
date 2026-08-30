@@ -11,10 +11,10 @@ const greetingGuardPath = path.join(root, 'company-greeting-guard.js');
 
 async function source(file) { return readFile(file, 'utf8'); }
 
-test('mail review loads identity v4 directly before template bootstrap', async () => {
+test('mail review keeps identity naming but does not load the send-blocking identity guard', async () => {
   const html = await source(reviewHtml);
   assert.match(html, /data-company-identity-runtime="1"[^>]+company-name-llm\.js\?v=20260830-company-identity-v4/);
-  assert.match(html, /company-identity-mail-guard\.js\?v=20260830-company-identity-v4/);
+  assert.doesNotMatch(html, /company-identity-mail-guard\.js/);
   assert.ok(html.indexOf('company-name-llm.js?v=20260830-company-identity-v4') < html.indexOf('mail-templates.js?v=20260830-company-identity-v4'));
 });
 
