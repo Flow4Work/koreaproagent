@@ -11,6 +11,7 @@
     'asn.au','com.au','edu.au','gov.au','id.au','net.au','org.au','ac.jp','co.jp','go.jp','ne.jp','or.jp','com.br','com.cn','com.hk','com.mx','com.sg',
     'com.tr','com.tw','com.vn','co.id','co.in','co.nz','co.th','co.za','net.cn','net.in','org.cn','org.in'
   ]);
+  const GENERIC_LOCAL = /^(?:info|hello|contact|office|team|admin|general|support|help|sales|marketing|events?|business|partners?|partnerships?|operations?|ops)$/i;
 
   const clean = (value = '', max = 500) => String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
   const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
@@ -33,6 +34,20 @@
     return /^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/i.test(clean(value, 240));
   }
 
+  function statusOf(contact = {}) {
+    const raw = clean(contact?.emailStatus || contact?.confidence || contact?.verification?.status || contact?.status, 80).toLowerCase().replace(/[\s-]+/g, '_');
+    if (['verified','valid','deliverable','safe'].includes(raw)) return 'valid';
+    if (raw.includes('accept')) return 'accept_all';
+    if (['invalid','undeliverable','disposable','webmail'].includes(raw)) return 'invalid';
+    return 'unknown';
+  }
+
+  function sourceUrls(contact = {}) {
+    return (Array.isArray(contact?.sources) ? contact.sources : [])
+      .map(source => typeof source === 'string' ? source : source?.url || source?.uri || '')
+      .map(value => clean(value, 600)).filter(Boolean);
+  }
+
   function mergeContacts(rows = []) {
     const map = new Map();
     for (const row of rows) {
@@ -46,7 +61,8 @@
         email,
         name: current.name || row.name || '',
         title: current.title || row.title || '',
-        qualified: Boolean(current.qualified || row.qualified)
+        qualified: Boolean(current.qualified || row.qualified),
+        sources: [...new Set([...sourceUrls(current), ...sourceUrls(row)])]
       });
     }
     return [...map.values()];
@@ -61,12 +77,51 @@
     ]);
   }
 
+  function domainContactScore(contact = {}, domain = '', leadDomain = '') {
+    const email = clean(contact?.email, 240).toLowerCase();
+    const local = email.split('@')[0] || '';
+    let score = 10;
+    if (contact?.qualified === true) score += 16;
+    if (statusOf(contact) === 'valid') score += 12;
+    else if (statusOf(contact) === 'accept_all') score += 5;
+    if (contact?.officialPublished === true) score += 18;
+    if (!GENERIC_LOCAL.test(local)) score += 4;
+    if (domain && leadDomain && domain === leadDomain) score += 8;
+    if (sourceUrls(contact).some(source => rootDomain(source) === domain)) score += 8;
+    return score;
+  }
+
   function primaryEmail(lead = {}) {
-    const rows = allContacts(lead);
-    const preferred = rows.find(row => row.qualified === true && !FREE_MAIL.has(rootDomain(row.email)))
-      || rows.find(row => !FREE_MAIL.has(rootDomain(row.email)))
-      || rows[0];
-    return clean(preferred?.email, 240).toLowerCase();
+    const rows = allContacts(lead).filter(contact => {
+      const domain = rootDomain(contact?.email);
+      return domain && !FREE_MAIL.has(domain) && statusOf(contact) !== 'invalid';
+    });
+    if (!rows.length) return '';
+
+    const leadDomain = rootDomain(lead.domain || lead.url || '');
+    const groups = new Map();
+    for (const contact of rows) {
+      const domain = rootDomain(contact.email);
+      const group = groups.get(domain) || { domain, score: 0, contacts: [] };
+      group.contacts.push(contact);
+      group.score += domainContactScore(contact, domain, leadDomain);
+      groups.set(domain, group);
+    }
+
+    const winner = [...groups.values()].sort((a, b) =>
+      b.score - a.score
+      || b.contacts.length - a.contacts.length
+      || Number(b.domain === leadDomain) - Number(a.domain === leadDomain)
+      || a.domain.localeCompare(b.domain)
+    )[0];
+    if (!winner) return '';
+    const representative = winner.contacts.slice().sort((a, b) =>
+      Number(b.qualified === true) - Number(a.qualified === true)
+      || Number(statusOf(b) === 'valid') - Number(statusOf(a) === 'valid')
+      || Number(b.officialPublished === true) - Number(a.officialPublished === true)
+      || clean(a.email, 240).localeCompare(clean(b.email, 240))
+    )[0];
+    return clean(representative?.email, 240).toLowerCase();
   }
 
   function anchorForLead(lead = {}) {
@@ -99,7 +154,7 @@
 
   function contactAllowed(contact = {}, identity = {}) {
     const email = clean(contact?.email, 240).toLowerCase();
-    if (!validEmail(email) || !identityVerified(identity)) return false;
+    if (!validEmail(email) || statusOf(contact) === 'invalid' || !identityVerified(identity)) return false;
     if (officialEmailSet(identity).has(email)) return true;
     const anchor = rootDomain(identity.recipient_domain);
     const emailDomain = rootDomain(email);
@@ -140,7 +195,7 @@
     if (!lead || !identity || !anchor?.domain) return false;
     const before = JSON.stringify({
       company: lead.company, domain: lead.domain, url: lead.url, contact: lead.contact, contacts: lead.contacts,
-      candidates: lead.contact_candidates, identity: lead.company_identity
+      candidates: lead.contact_candidates, discovered: lead.discovered_contacts, identity: lead.company_identity
     });
 
     lead.raw_company = clean(lead.raw_company || lead.company, 220);
@@ -173,6 +228,7 @@
       lead.verified_by = finalByEmail ? 'recipient-email-domain-v5' : 'precontact-domain-v5';
       lead.contact_candidates = allowedContacts;
       lead.contacts = allowedContacts;
+      if (Array.isArray(lead.discovered_contacts)) lead.discovered_contacts = allowedContacts;
       lead.contact = allowedContacts.find(contact => contact.qualified === true) || allowedContacts[0] || null;
       lead.contact_status = lead.contact ? 'qualified' : 'identity_verified_no_contact';
       lead.contact_failure_reason = lead.contact ? null : '현재 회사 도메인과 일치하는 연락처를 아직 확보하지 못했습니다.';
@@ -186,7 +242,7 @@
 
     const after = JSON.stringify({
       company: lead.company, domain: lead.domain, url: lead.url, contact: lead.contact, contacts: lead.contacts,
-      candidates: lead.contact_candidates, identity: lead.company_identity
+      candidates: lead.contact_candidates, discovered: lead.discovered_contacts, identity: lead.company_identity
     });
     return before !== after;
   }
@@ -272,6 +328,7 @@
     }
 
     document.dispatchEvent(new CustomEvent('kpa:company-identity-updated', { detail: { version: VERSION, ids: targets.map(lead => lead.id) } }));
+    if (!requested.size && targets.length === 30) setTimeout(() => schedule(), 80);
     const selected = requested.size ? leads.filter(lead => requested.has(lead.id)) : targets;
     return {
       verified: selected.filter(lead => identityVerified(lead.company_identity)).length,
@@ -293,7 +350,6 @@
   }
 
   function wrapLeadMutations(attempt = 0) {
-    let found = false;
     if (typeof mergeLeads === 'function' && !mergeLeads.__emailIdentityV5) {
       const original = mergeLeads;
       const wrapped = function(incoming) {
@@ -303,7 +359,6 @@
       };
       wrapped.__emailIdentityV5 = true;
       mergeLeads = wrapped;
-      found = true;
     }
     if (typeof patchLead === 'function' && !patchLead.__emailIdentityV5) {
       const original = patchLead;
@@ -314,7 +369,6 @@
       };
       wrapped.__emailIdentityV5 = true;
       patchLead = wrapped;
-      found = true;
     }
     if (typeof saveState === 'function' && !saveState.__emailIdentityV5) {
       const original = saveState;
@@ -325,9 +379,8 @@
       };
       wrapped.__emailIdentityV5 = true;
       saveState = wrapped;
-      found = true;
     }
-    if (!found && attempt < 8) setTimeout(() => wrapLeadMutations(attempt + 1), 250);
+    if (attempt < 40) setTimeout(() => wrapLeadMutations(attempt + 1), 250);
   }
 
   globalThis.KPA_COMPANY_IDENTITY_REFRESH = resolvePending;
