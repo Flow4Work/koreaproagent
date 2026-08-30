@@ -5,7 +5,7 @@
   const KBEAUTY_MIN = 20;
   const SPECIAL = {
     bcww:{ short:'BCWW', endpoint:'/api/bcww', copy:'BCWW 2026 전용 검색 · 실제 참가 근거 → 해외 회사 → valid 회사 이메일 순서로 검증합니다.' },
-    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty Expo 2026 · 해외 후보 · 공식 사이트 · 회사 이메일' },
+    kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty 2026 · 해외 후보 · 사이트 · 이메일' },
     wsce:{ short:'WSCE', endpoint:'/api/wsce', copy:'WSCE 2026 전용 검색 · 공식 참가사/직접 참가 증거 → 해외 본체 → valid 회사 이메일 순서로 검증합니다.' },
     education_fair:{ short:'Education Fair', endpoint:'/api/education-fair', copy:'International Education Fair 2026 전용 검색 · 실제 참가기관 → 해외 본체 → valid 이메일 순서로 검증합니다.' }
   };
@@ -28,6 +28,24 @@
   };
   window.__kpaCampaignMeta ||= {};
 
+  if (!document.getElementById('kbeauty-compact-toolbar-style')) {
+    const style=document.createElement('style');
+    style.id='kbeauty-compact-toolbar-style';
+    style.textContent=`
+      @media (min-width: 900px) {
+        .toolbar { gap: 10px; }
+        .toolbar-title { min-width: 0; flex: 1 1 auto; white-space: nowrap; }
+        .toolbar-title h1 { flex: 0 0 auto; white-space: nowrap; }
+        .toolbar-title small { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .toolbar-actions { flex: 0 0 auto; flex-wrap: nowrap !important; white-space: nowrap; }
+        .toolbar-actions button, .toolbar-actions select { white-space: nowrap; }
+        #clearSelectionBtn { min-width: max-content; }
+        .summary { flex-wrap: nowrap; white-space: nowrap; overflow-x: auto; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+
   const basePost = post;
   post = async (url,payload,timeout) => {
     const result = await basePost(url,payload,timeout);
@@ -47,7 +65,7 @@
       b.classList.add('hunting'); return;
     }
     if(state.manualRunning){b.textContent=`${s} 찾는 중…`;b.disabled=true;return;}
-    if(id==='kbeauty'){b.textContent='K-Beauty 후보 찾기';b.classList.add('auto-ready');return;}
+    if(id==='kbeauty'){b.textContent='후보 찾기';b.classList.add('auto-ready');return;}
     if(get('stopped',id)){b.textContent=`${s} 새로 찾기`;return;}
     if(get('firstRun',id)){b.textContent=`${s} 자동사냥`;b.classList.add('auto-ready');return;}
     b.textContent=`${s} 후보 찾기`;
@@ -59,20 +77,45 @@
     if(id==='bcww') return `${s} 전용 ${Number(m.cycle)||1}회차 · 참가 검증 ${Number(m.evidence_verified_companies)||0} · 이메일 탐색 ${Number(m.contact_attempted)||0} · valid ${Number(m.contact_ready)||0} · 미확보 ${Number(m.contact_unresolved)||0}`;
     if(id==='kbeauty') {
       const k=kbeautyStats();
-      return `K-Beauty 후보 ${k.total} · 이메일 ${k.emails} · 2026 직접 ${k.direct} · 2025 재참가 ${k.repeat} · 사이트 ${k.sites}/${k.total}`;
+      return `후보 ${k.total} · 메일 ${k.emails} · 26확정 ${k.direct} · 재참가 ${k.repeat} · 사이트 ${k.sites}/${k.total}`;
     }
     return `${s} 전용 ${Number(m.cycle)||1}회차 · 신규 ${Number(m.returned)||0}`;
   }
 
+  function compactKBeautyHeader(){
+    const title=document.querySelector('.toolbar-title h1');
+    const clear=document.getElementById('clearSelectionBtn');
+    if(state.currentCampaign==='kbeauty') {
+      if(title) title.textContent='오늘 돈 찾기';
+      if(clear) clear.textContent='해제';
+    } else {
+      if(title) title.textContent='오늘 어디서 돈을 찾을까';
+      if(clear) clear.textContent='선택 해제';
+    }
+  }
+
+  function compactKBeautySummary(summary){
+    if(state.currentCampaign!=='kbeauty' || !summary) return;
+    for(const el of [...summary.children]) {
+      const text=clean(el.textContent);
+      if(/^K-Beauty Expo 후보 /.test(text)) el.textContent=text.replace('K-Beauty Expo 후보 ','후보 ').replace(/개$/,'');
+      else if(/^발송 가능 /.test(text)) el.textContent=text.replace('발송 가능 ','발송 ').replace(/개$/,'');
+      else if(/^선택 /.test(text)) el.textContent=text.replace(/개$/,'');
+      else if(/KBW 최신 신규 후보|발송\/추가\/삭제 제외/.test(text)) el.remove();
+    }
+  }
+
   function refresh(){
     const id=state.currentCampaign, sub=document.querySelector('.toolbar-title small');
+    compactKBeautyHeader();
     if(sub) sub.textContent=isSpecial(id)?SPECIAL[id].copy:'구매 신호와 실제 담당자를 찾고, 상대가 부담 없이 답할 수 있는 첫 메일까지 만듭니다.';
     updateMainButton();
     if(!isSpecial(id)) return;
     const summary=document.getElementById('summary'), live=summary?.querySelector('.hunt-live'); if(!summary)return;
+    compactKBeautySummary(summary);
     if(id==='kbeauty') {
       summary.querySelector('.hunt-found')?.remove();
-      if(live&&live.textContent!=='K-Beauty 이메일 우선 탐색 중') live.textContent='K-Beauty 이메일 우선 탐색 중';
+      if(live&&live.textContent!=='메일 탐색 중') live.textContent='메일 탐색 중';
       return;
     }
     if(!live){summary.querySelector('.hunt-found')?.remove();return;}
