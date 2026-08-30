@@ -16,6 +16,19 @@
     .replace(/\s+/g, ' ').trim();
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
 
+  function foreignPriority(row = {}) {
+    const country = clean(row?.country, 80).toLowerCase();
+    const company = clean(row?.company, 180);
+    const domain = clean(row?.domain, 180).toLowerCase();
+    if (country && !/(?:korea|south korea|republic of korea|대한민국|한국)/i.test(country)) return 100;
+    if (/[가-힣]/.test(company)) return 0;
+    if (/\.(?:kr|co\.kr)$/i.test(domain)) return 0;
+    if (/(?:pvt\.?\s*ltd|sdn\s*bhd|gmbh|b\.v\.|s\.a\.|s\.l\.|llc|llp|pty\s*ltd|pte\.?\s*ltd)/i.test(company)) return 90;
+    if (/(?:guangzhou|shanghai|shenzhen|zhejiang|ningbo|dongguan|suzhou|anhui|jiangsu|jiangxi|jinhua|yuyao|zhuhai|foshan|hangzhou)/i.test(company)) return 88;
+    if (domain && !domain.endsWith('.kr')) return 82;
+    return 30;
+  }
+
   function existingKeys() {
     const keys = new Set();
     for (const row of read(QUEUE_KEY, [])) {
@@ -36,7 +49,9 @@
     const current = read(QUEUE_KEY, []);
     const seen = existingKeys();
     const added = [];
-    for (const raw of Array.isArray(incoming) ? incoming : []) {
+    const ranked = [...(Array.isArray(incoming) ? incoming : [])]
+      .sort((a, b) => foreignPriority(b) - foreignPriority(a) || Number(b?.score || 0) - Number(a?.score || 0));
+    for (const raw of ranked) {
       const company = clean(raw?.company, 180);
       const key = companyKey(company);
       if (!company || !key || seen.has(key)) continue;
@@ -44,6 +59,7 @@
       added.push({
         ...raw,
         company,
+        foreign_priority: foreignPriority(raw),
         id: clean(raw?.id, 180) || `kbeauty-seed:${key.replace(/\s+/g, '-').slice(0, 110)}`,
         curated_2026: true,
         kbeauty_v6_domain_attempts: 0,
