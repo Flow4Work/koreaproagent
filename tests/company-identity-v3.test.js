@@ -25,6 +25,12 @@ test('strong official-site metadata can establish the public-facing brand', () =
   assert.equal(selected?.value, 'MUZE Packaging');
 });
 
+test('mixed-case public brand plus official self-description is strong evidence', () => {
+  const html = '<html><body><p>MUZE Packaging is a professional manufacturer of plastic bottles and comprehensive packaging solutions.</p></body></html>';
+  const selected = chooseBrand(extractIdentityCandidates(html, 'https://muzepackage.com/'), 'Guangzhou Muze Packaging Solutions Technology Co., Ltd', 'muzepackage.com');
+  assert.equal(selected?.value, 'MUZE Packaging');
+});
+
 test('explicit official-site brand declaration can establish a short brand', () => {
   const html = '<html><body><p>MISS EDE is the brand created for modern beauty customers.</p></body></html>';
   const selected = chooseBrand(extractIdentityCandidates(html, 'https://missede.com/about'), 'MISS EDE Vietnam', 'missede.com');
