@@ -29,6 +29,20 @@
   function readJson(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } }
   function currentEventConfig() { return EVENT_CAMPAIGNS[state.currentCampaign] || null; }
 
+  function kbeautyIdentityReady(lead = {}) {
+    if (lead?.campaign !== 'kbeauty') return true;
+    const identity = lead?.company_identity || {};
+    const companyDomain = typeof rootHost === 'function' ? rootHost(lead.domain || lead.url || '') : '';
+    const identityDomain = typeof rootHost === 'function' ? rootHost(identity.domain || '') : '';
+    return /^K-Beauty v6 evidence \+ official-domain foreign verification$/i.test(cleanText(lead?.verified_by,160))
+      && identity?.status === 'verified'
+      && Number(identity?.confidence || 0) >= 0.85
+      && Boolean(cleanText(identity?.greeting_name,120))
+      && Boolean(cleanText(identity?.evidence_url,600))
+      && Boolean(companyDomain)
+      && identityDomain === companyDomain;
+  }
+
   function strictEventContact(lead = {}) {
     const threshold = Math.max(75, Number(lead.contact_score_threshold) || 75);
     const rows = [lead.contact, ...(Array.isArray(lead.contacts) ? lead.contacts : [])].filter(Boolean);
@@ -45,7 +59,7 @@
         const sources = Array.isArray(contact?.sources) ? contact.sources : [];
         const providers = Array.isArray(contact?.providers) ? contact.providers : String(contact?.provider || '').split('+');
         const officialSource = sources.some(source => { try { return typeof rootHost === 'function' && rootHost(source) === companyDomain; } catch { return false; } });
-        const providerEvidence = providers.some(provider => /^(?:hunter|hunter_verify|jina|public_web|prospeo|apollo|tomba)$/i.test(String(provider || '')));
+        const providerEvidence = providers.some(provider => /^(?:hunter|hunter_verify|jina|public_web|prospeo|apollo|tomba|official_site|official_recovery|nvidia_muse_glimmer|tavily)$/i.test(String(provider || '')));
         return officialSource || providerEvidence;
       }
 
@@ -67,6 +81,7 @@
       lead?.verified_company === true &&
       lead?.[config.confirmedKey] === true &&
       lead?.team_origin === 'foreign' &&
+      kbeautyIdentityReady(lead) &&
       strictEventContact(lead) &&
       cleanText(leadMessage(lead), 12000).length >= 120
     );
@@ -160,13 +175,13 @@
       if (contacts.length) {
         current.contact = contacts[0];
         current.contacts = contacts;
-        current.contact_provider = 'hunter';
+        current.contact_provider = 'multi_provider';
         current.contact_status = 'found';
         current.contact_failure_reason = '';
         found += 1;
       } else {
         current.contact_status = current.domain ? 'failed' : 'website_pending';
-        current.contact_failure_reason = current.domain ? 'Hunter 빠른 검색 미확보' : '공식 사이트 확인 중';
+        current.contact_failure_reason = current.domain ? '병렬 검색 미확보' : '공식 사이트 확인 중';
       }
     }
     saveState(); render();
@@ -202,8 +217,8 @@
         ? `<span class="hunt-live">K-Beauty 계속 탐색 중</span>`
         : `<span class="hunt-live">자동사냥 ${remainingText()} 남음</span>`
       : '';
-    const floor = state.currentCampaign === 'kbeauty' ? `<span>목표 ${Math.min(leads.length,20)}/20</span>` : '';
-    $('summary').innerHTML = `<strong>${esc(config?.short || '행사')} 후보 ${leads.length}개</strong>${floor}<span>발송 가능 ${ready}개</span><span>선택 ${selected}개</span>${auto}${state.statusText ? `<span>${esc(state.statusText)}</span>` : ''}`;
+    const target = state.currentCampaign === 'kbeauty' ? `<span>목표 500</span>` : '';
+    $('summary').innerHTML = `<strong>${esc(config?.short || '행사')} 후보 ${leads.length}개</strong>${target}<span>발송 가능 ${ready}개</span><span>선택 ${selected}개</span>${auto}${state.statusText ? `<span>${esc(state.statusText)}</span>` : ''}`;
   }
 
   const previousRenderSummary = renderSummary;
@@ -216,6 +231,7 @@
 
   function eventStatus(lead = {}) {
     if (leadReady(lead)) return '발송 준비';
+    if (lead.campaign === 'kbeauty' && !kbeautyIdentityReady(lead)) return '회사·행사 검증 중';
     if (lead.contact_status === 'searching') return '이메일 확인 중';
     if (lead.contact_status === 'website_pending') return '공식 사이트 확인 중';
     if (lead.contact_status === 'failed') return '이메일 미확보';
@@ -338,13 +354,13 @@
     const cycle = nextEventCycle(state.currentCampaign);
     const currentCount = visibleEventLeads().length;
     state.statusText = state.currentCampaign === 'kbeauty'
-      ? `해외 후보 ${Math.min(currentCount,20)}/20 · 정확한 회사 확인 중`
+      ? `해외 후보 ${currentCount}/500 · 정확한 회사 확인 중`
       : `${config.short} 2026 실제 해외 참가사 확인 중`;
     render();
 
     const excluded = state.leads.filter(lead => lead?.campaign === state.currentCampaign).map(lead => lead.domain).filter(Boolean).slice(-500);
     const payload = { cycle, excludeDomains:excluded, tools:toolKeys() };
-    if (state.currentCampaign === 'kbeauty') Object.assign(payload, { targetFloor:20, currentCount });
+    if (state.currentCampaign === 'kbeauty') Object.assign(payload, { targetFloor:500, currentCount });
     const result = await post(config.endpoint, payload, 115000);
     const added = mergeEventLeads(result.leads || [], state.currentCampaign);
     const meta = result.meta || {};
@@ -355,7 +371,7 @@
       const repeats = Number(meta.repeat_2025_candidates || 0);
       const resolved = Number(meta.website_resolved || 0);
       const unresolved = Number(meta.website_unresolved || 0);
-      state.statusText = `현재 ${Math.min(total,20)}/20 · 신규 ${added.length} · 2026 직접 ${confirmed} · 재참가 후보 ${repeats} · 사이트 ${resolved}확인/${unresolved}확인중`;
+      state.statusText = `현재 ${total}/500 · 신규 ${added.length} · 2026 직접 ${confirmed} · 재참가 후보 ${repeats} · 사이트 ${resolved}확인/${unresolved}확인중`;
     } else if (added.length) state.statusText = `${added.length}개 참가사 확인 · 이메일 검증 중`;
     else {
       const official = Number(meta.official_foreign_candidates || meta.official_current_participants || 0);
@@ -365,14 +381,14 @@
     render();
 
     if (state.currentCampaign === 'kbeauty') {
-      state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · Exa로 사이트 확인 + Hunter 이메일 빠른 수집 중`;
+      state.statusText = `해외 후보 ${visibleEventLeads().length}/500 · 병렬 사이트 확인 + 이메일 수집 중`;
       render();
       const fast = await fastKBeautyContacts();
       const slowFallback = visibleEventLeads('kbeauty')
         .filter(lead => lead.domain && safeLink(lead.url) && !strictEventContact(lead) && lead.contact_status === 'failed')
         .slice(0, 10);
       if (slowFallback.length) await mapLimit(slowFallback, 6, enrichContact);
-      state.statusText = `해외 후보 ${Math.min(visibleEventLeads().length,20)}/20 · 빠른 이메일 ${fast.found}개 · 사이트 추가 확인 ${fast.resolved}개`;
+      state.statusText = `해외 후보 ${visibleEventLeads().length}/500 · 빠른 이메일 ${fast.found}개 · 사이트 추가 확인 ${fast.resolved}개`;
     } else {
       if (added.length) await mapLimit(added.slice(0, 28), 4, enrichContact);
       if (added.length) state.statusText = `${added.length}개 처리 완료`;
