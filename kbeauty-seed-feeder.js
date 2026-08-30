@@ -8,6 +8,7 @@
   const TARGET = 500;
   const RETRY_MS = 3 * 60 * 1000;
   let busy = false;
+  let activeController = null;
 
   const clean = (value = '', max = 300) => String(value || '').replace(/\s+/g, ' ').trim().slice(0, max);
   const companyKey = value => clean(value, 180).toLowerCase()
@@ -15,6 +16,10 @@
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .replace(/\s+/g, ' ').trim();
   const read = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
+  const kbeautyRunning = () => {
+    try { return typeof state !== 'undefined' && state.currentCampaign === 'kbeauty' && state.auto === true && state.autoCampaign === 'kbeauty'; }
+    catch { return false; }
+  };
 
   function foreignPriority(row = {}) {
     const country = clean(row?.country, 80).toLowerCase();
@@ -71,27 +76,37 @@
     return added.length;
   }
 
+  function stopFeeder() {
+    try { activeController?.abort(); } catch {}
+    activeController = null;
+    busy = false;
+  }
+  window.KPA_KBEAUTY_SEED_FEEDER_STOP = stopFeeder;
+
   async function feed() {
-    if (busy) return;
-    try {
-      if (typeof state !== 'undefined' && state.currentCampaign !== 'kbeauty') return;
-    } catch { return; }
+    // Button contract is owned only by campaign-run-controller.js:
+    // 후보 찾기 -> 진정시키기 -> 후보 찾기.
+    // This feeder must never run or alter UI while K-Beauty auto hunt is calm.
+    if (busy || !kbeautyRunning()) return;
 
     const meta = read(META_KEY, {});
     if (Number(meta?.returned || 0) >= TARGET && Date.now() - Number(meta?.at || 0) < 12 * 60 * 60 * 1000) return;
     if (Number(meta?.lastAttempt || 0) && Date.now() - Number(meta.lastAttempt) < RETRY_MS) return;
 
     busy = true;
+    activeController = new AbortController();
     localStorage.setItem(META_KEY, JSON.stringify({ ...meta, lastAttempt: Date.now() }));
     try {
       const response = await fetch('/api/kbeauty', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         cache: 'no-store',
+        signal: activeController.signal,
         body: JSON.stringify({ action: 'seed_2026', limit: TARGET })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !Array.isArray(data?.candidates)) throw new Error(data?.error || `HTTP ${response.status}`);
+      if (!kbeautyRunning()) return;
       const added = mergeQueue(data.candidates);
       const nextMeta = {
         at: Date.now(),
@@ -103,65 +118,26 @@
       localStorage.setItem(META_KEY, JSON.stringify(nextMeta));
       if (added && typeof render === 'function') render();
     } catch (error) {
-      localStorage.setItem(META_KEY, JSON.stringify({ ...read(META_KEY, {}), lastAttempt: Date.now(), error: clean(error?.message || error, 180) }));
+      if (error?.name !== 'AbortError') {
+        localStorage.setItem(META_KEY, JSON.stringify({ ...read(META_KEY, {}), lastAttempt: Date.now(), error: clean(error?.message || error, 180) }));
+      }
     } finally {
+      activeController = null;
       busy = false;
     }
   }
 
   const start = () => {
-    feed();
-    setInterval(feed, 60 * 1000);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-  else start();
-})();
+    setInterval(feed, 1000);
 
-(() => {
-  if (window.__KPA_KBEAUTY_CALM_UI__) return;
-  window.__KPA_KBEAUTY_CALM_UI__ = true;
-
-  const isKBeauty = () => {
-    try { return typeof state !== 'undefined' && state.currentCampaign === 'kbeauty'; }
-    catch { return false; }
-  };
-  const isRunning = () => {
-    try { return Boolean(state.auto && state.autoCampaign === 'kbeauty'); }
-    catch { return false; }
-  };
-
-  function restoreButtonState() {
-    if (!isKBeauty()) return;
-    const button = document.getElementById('runBtn');
-    if (!button) return;
-    button.disabled = false;
-    button.classList.remove('auto-ready', 'hunting');
-    if (isRunning()) {
-      button.textContent = '진정시키기';
-      button.classList.add('hunting');
-    } else {
-      button.textContent = '자동사냥';
-      button.classList.add('auto-ready');
-    }
-
-    const live = document.querySelector('#summary .hunt-live');
-    if (live) live.textContent = isRunning() ? '자동사냥 중' : '';
-  }
-
-  const start = () => {
-    restoreButtonState();
-    const button = document.getElementById('runBtn');
-    const summary = document.getElementById('summary');
-    const campaign = document.getElementById('campaignSelect');
-    if (button) new MutationObserver(() => requestAnimationFrame(restoreButtonState)).observe(button, { childList: true, characterData: true, subtree: true, attributes: true });
-    if (summary) new MutationObserver(() => requestAnimationFrame(restoreButtonState)).observe(summary, { childList: true, characterData: true, subtree: true });
-    campaign?.addEventListener('change', () => setTimeout(restoreButtonState, 0), true);
+    // If the user clicks 진정시키기, abort even an in-flight seed request.
     document.addEventListener('click', event => {
       if (!event.target?.closest?.('#runBtn')) return;
-      setTimeout(restoreButtonState, 0);
-      setTimeout(restoreButtonState, 120);
+      setTimeout(() => { if (!kbeautyRunning()) stopFeeder(); }, 0);
     }, true);
-    setInterval(restoreButtonState, 500);
+    document.getElementById('campaignSelect')?.addEventListener('change', () => {
+      setTimeout(() => { if (!kbeautyRunning()) stopFeeder(); }, 0);
+    }, true);
   };
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
