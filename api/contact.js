@@ -1,5 +1,7 @@
 import { POST as baseHunt } from './hunt.js';
-import { findContacts } from '../lib/contact-discovery-v2.js';
+import { contactProviderStatus, findContacts } from '../lib/contact-discovery-v2.js';
+import { contactDiscoveryConfigured } from '../lib/contact-discovery.js';
+import { AI_MODEL, AI_PROVIDER, aiConfigured, groqConfigured, checkAiConnection, runInferenceSmoke } from '../lib/ai-provider.js';
 import { attendanceGrade, mergeEvidence } from '../lib/hunt-qualification.js';
 import { listSentCompanyDomains, normalizeCompanyKey } from '../lib/sent-companies.js';
 import { IDENTITY_VERSION, resolveCompanyIdentities } from '../lib/company-identity.js';
@@ -12,6 +14,88 @@ function normalizeCompanyName(value = '') {
     .replace(/\s*(?:[·|:—–-]\s*)?(?:events?\s+list|list\s+of\s+events)\s*$/i, '')
     .trim();
   return normalized || original;
+}
+
+function healthSafeMessage(text = '') {
+  return String(text)
+    .replace(/tvly-[A-Za-z0-9_-]+/g, '[redacted]')
+    .replace(/[A-Za-z0-9]{32,}/g, '[key]')
+    .slice(0, 280);
+}
+
+function deploymentMetadata() {
+  const deploymentUrl = String(process.env.VERCEL_URL || '').trim();
+  return {
+    deploymentCommit: process.env.VERCEL_GIT_COMMIT_SHA || null,
+    deploymentBranch: process.env.VERCEL_GIT_COMMIT_REF || null,
+    deploymentEnvironment: process.env.VERCEL_ENV || null,
+    deploymentUrl: deploymentUrl ? `https://${deploymentUrl}` : null
+  };
+}
+
+async function healthResponse() {
+  const opencodeConfigured = aiConfigured();
+  const groqKeyConfigured = groqConfigured();
+  const tavilyConfigured = Boolean(process.env.TAVILY_API_KEY);
+  const contactProviders = contactProviderStatus();
+  const contactsConfigured = contactDiscoveryConfigured();
+
+  let ai = { ok: false, available: false, error: 'OpenCode not configured' };
+  let smoke = null;
+
+  if (opencodeConfigured) {
+    ai = await checkAiConnection();
+    if (ai.ok) smoke = await runInferenceSmoke(8000);
+  }
+
+  const aiReady = Boolean(opencodeConfigured && ai.ok && smoke?.ok);
+  const searchReady = tavilyConfigured;
+
+  const result = {
+    ok: Boolean(searchReady && aiReady),
+    ...deploymentMetadata(),
+    searchReady,
+    aiReady,
+    aiProvider: AI_PROVIDER,
+    aiModel: AI_MODEL,
+    opencodeConfigured,
+    opencodeConnected: Boolean(ai.ok),
+    opencodeModelAvailable: Boolean(ai.available),
+    groqConfigured: groqKeyConfigured,
+    tavilyConfigured,
+    inferenceSmokeOk: Boolean(smoke?.ok),
+    inferenceSmokeModel: smoke?.model || null,
+    inferenceSmokeError: smoke?.ok ? null : healthSafeMessage(smoke?.error || ai.error || 'AI inference unavailable'),
+    contactDiscoveryConfigured: contactsConfigured,
+    contactProviders,
+    searchProvider: 'tavily',
+    timestamp: new Date().toISOString(),
+    aiConfigured: opencodeConfigured,
+    aiConnected: Boolean(ai.ok),
+    aiModelAvailable: Boolean(ai.available),
+    allModelsAvailable: Boolean(ai.available)
+  };
+
+  if (!tavilyConfigured) {
+    result.status = 'tavily_missing';
+    result.error = 'TAVILY_API_KEY is missing';
+    return Response.json(result, { status: 503, headers: { 'Cache-Control':'no-store' } });
+  }
+
+  if (!aiReady) {
+    result.status = 'search_ready_ai_degraded';
+    result.warning = healthSafeMessage(smoke?.error || ai.error || 'AI inference is currently degraded');
+  } else {
+    result.status = 'ready';
+  }
+
+  return Response.json(result, { status: 200, headers: { 'Cache-Control':'no-store' } });
+}
+
+export async function GET(request) {
+  const url = new URL(request.url);
+  if (url.searchParams.get('action') === 'health') return healthResponse();
+  return Response.json({ error: 'method_not_allowed' }, { status: 405, headers: { 'Cache-Control':'no-store' } });
 }
 
 async function cleanCompanyNames(body = {}) {
