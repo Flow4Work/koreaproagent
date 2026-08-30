@@ -135,6 +135,14 @@
 })();
 
 (() => {
+  if (document.querySelector('script[data-kbeauty-seed-feeder]')) return;
+  const script = document.createElement('script');
+  script.src = '/kbeauty-seed-feeder.js?v=20260830-seed500-v1';
+  script.dataset.kbeautySeedFeeder = '1';
+  document.head.appendChild(script);
+})();
+
+(() => {
   if (window.__KPA_PLAIN_EMAIL_GUARD__) return;
   window.__KPA_PLAIN_EMAIL_GUARD__ = true;
 
