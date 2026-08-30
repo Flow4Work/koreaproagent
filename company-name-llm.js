@@ -389,6 +389,7 @@
   }
 
   document.addEventListener('click', event => {
+    if (/mail-review/i.test(location.pathname)) return;
     const button = event.target?.closest?.('#sendAllBtn');
     if (!button) return;
     const reason = sendBlockReason();
