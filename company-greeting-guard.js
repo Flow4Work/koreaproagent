@@ -1,36 +1,23 @@
 (() => {
-  const API_VERSION = '20260830-company-identity-v4-compat';
-  const IDENTITY_VERSION = '20260830-company-identity-v4';
-  const MULTI_LABEL_SUFFIXES = new Set([
+  const API_VERSION = '20260830-email-domain-identity-v5-compat';
+  const IDENTITY_VERSION = '20260830-email-domain-identity-v5';
+  const MULTI_SUFFIXES = new Set([
     'ac.kr','co.kr','go.kr','ne.kr','or.kr','re.kr','pe.kr','ac.uk','co.uk','gov.uk','ltd.uk','me.uk','net.uk','nhs.uk','org.uk','plc.uk','sch.uk',
     'asn.au','com.au','edu.au','gov.au','id.au','net.au','org.au','ac.jp','co.jp','go.jp','ne.jp','or.jp','com.br','com.cn','com.hk','com.mx','com.sg',
     'com.tr','com.tw','com.vn','co.id','co.in','co.nz','co.th','co.za','net.cn','net.in','org.cn','org.in'
   ]);
-  const FREE_EMAIL_DOMAINS = new Set([
-    'gmail.com','googlemail.com','yahoo.com','yahoo.co.jp','outlook.com','hotmail.com','live.com','icloud.com','proton.me','protonmail.com'
-  ]);
-  const BAD_NAME_WORDS = /\b(?:activation|activations|event|events|event\s+list|official\s+site|homepage|home|conference|summit|speaker|speakers|sponsor|sponsors|attendee|attendees|list|directory)\b/i;
-  const BAD_PERSON_WORDS = /\b(?:team|support|info|sales|contact|hello|office|media|press|marketing|events?|partnerships?|business|community|operations?|founder|ceo|director|manager|lead)\b/i;
+  const BAD_NAME = /\b(?:activation|activations|event|events|event\s+list|official\s+site|homepage|conference|summit|speaker|speakers|sponsor|sponsors|attendee|attendees|directory|logo)\b/i;
+  const BAD_PERSON = /\b(?:team|support|info|sales|contact|hello|office|media|press|marketing|events?|partnerships?|business|community|operations?|founder|ceo|director|manager|lead)\b/i;
 
-  function clean(value = '', max = 240) {
-    return String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
-  }
+  const clean = (value = '', max = 240) => String(value || '').replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  const load = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; } catch { return fallback; } };
 
   function hostname(value = '') {
-    const raw = clean(value, 500).toLowerCase();
+    let raw = clean(value, 500).toLowerCase();
     if (!raw) return '';
-    try {
-      const url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
-      return url.hostname.replace(/^www\./, '').replace(/\.+$/, '');
-    } catch {
-      return raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(':')[0].replace(/\.+$/, '');
-    }
-  }
-
-  function emailDomain(value = '') {
-    const email = clean(value, 240).toLowerCase();
-    const match = email.match(/^[^@\s]+@([^@\s]+)$/);
-    return match ? hostname(match[1]) : '';
+    if (raw.includes('@') && !raw.includes('://')) raw = raw.split('@').pop() || '';
+    try { return new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`).hostname.replace(/^www\./, '').replace(/\.+$/, ''); }
+    catch { return raw.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(':')[0].replace(/\.+$/, ''); }
   }
 
   function registrableDomain(value = '') {
@@ -38,7 +25,7 @@
     const parts = host.split('.').filter(Boolean);
     if (parts.length <= 2) return host;
     const suffix2 = parts.slice(-2).join('.');
-    return parts.slice(-(MULTI_LABEL_SUFFIXES.has(suffix2) ? 3 : 2)).join('.');
+    return parts.slice(-(MULTI_SUFFIXES.has(suffix2) ? 3 : 2)).join('.');
   }
 
   function domainStem(value = '') {
@@ -46,34 +33,19 @@
     if (!domain) return '';
     const parts = domain.split('.');
     const suffix2 = parts.slice(-2).join('.');
-    return MULTI_LABEL_SUFFIXES.has(suffix2) ? parts.slice(0, -2).join('') : parts[0];
-  }
-
-  function titleWord(word = '') {
-    const lower = clean(word, 80).toLowerCase();
-    if (/^(ai|dao|vc|vr|ar|xr|ct|io|web3|nft|defi|gtm)$/.test(lower)) return lower.toUpperCase();
-    return lower ? `${lower[0].toUpperCase()}${lower.slice(1)}` : '';
+    return MULTI_SUFFIXES.has(suffix2) ? parts.slice(0, -2).join('') : parts[0];
   }
 
   function brandFromDomain(value = '') {
-    const stem = domainStem(value).replace(/[-_]+/g, ' ').trim();
-    return stem ? stem.split(/\s+/).filter(Boolean).map(titleWord).join(' ') : '';
+    return domainStem(value).replace(/[-_]+/g, ' ').trim();
   }
 
   function validCompanyName(value = '') {
     const name = clean(value, 160);
     if (!name || name.length > 80) return false;
     if (/@|https?:\/\/|\[|\]|\{|\}|<|>|·|\||\b20\d{2}\b/i.test(name)) return false;
-    if (BAD_NAME_WORDS.test(name) || /\bteam\b/i.test(name)) return false;
+    if (BAD_NAME.test(name) || /\bteam\b/i.test(name)) return false;
     return /[\p{L}\p{N}]/u.test(name);
-  }
-
-  function recoverMatchingCandidate(raw = '', domain = '') {
-    const candidate = clean(raw, 160).replace(/\s+team$/i, '').trim();
-    const stem = domainStem(domain).toLowerCase().replace(/[^a-z0-9]/g, '');
-    const key = candidate.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!candidate || !stem || !key || !validCompanyName(candidate)) return '';
-    return (key === stem || (Math.min(key.length, stem.length) >= 5 && (key.includes(stem) || stem.includes(key)))) ? candidate : '';
   }
 
   function identityRecord(lead = {}) {
@@ -81,56 +53,29 @@
     return identity && typeof identity === 'object' ? identity : null;
   }
 
-  function identityCurrent(lead = {}) {
-    const identity = identityRecord(lead);
-    return identity?.identity_version === IDENTITY_VERSION ? identity : null;
-  }
-
   function identityCurrentVerified(lead = {}) {
-    const identity = identityCurrent(lead);
+    const identity = identityRecord(lead);
     return Boolean(identity
+      && identity.identity_version === IDENTITY_VERSION
       && identity.status === 'verified'
       && Number(identity.confidence || 0) >= 0.85
       && validCompanyName(identity.greeting_name || identity.brand_name || ''));
   }
 
-  function primaryEmail(lead = {}) {
-    const rows = [lead.contact, ...(Array.isArray(lead.contacts) ? lead.contacts : [])].filter(Boolean);
-    return clean(rows.find(row => emailDomain(row?.email))?.email || '', 240);
-  }
-
-  function trustedExplicitName(lead = {}) {
-    const raw = clean(lead.company, 160).replace(/\s+team$/i, '').trim();
-    const trusted = Boolean(
-      lead?.contact?.verifiedOverride === true ||
-      lead?.contact?.verified_override === true ||
-      /^kbw-curated:/i.test(clean(lead.id, 220)) ||
-      /(manual|curated|official-web|official_domain|official-domain)/i.test(clean(lead.verified_by, 180))
-    );
-    return trusted && validCompanyName(raw) ? raw : '';
-  }
-
   function canonicalCompanyName(lead = {}) {
     const identity = identityRecord(lead);
-    if (identity) {
-      if (identityCurrentVerified(lead)) return clean(identity.greeting_name || identity.brand_name, 160);
-      // Once an identity record exists, never reconstruct the brand from a URL/email while identity verification is pending.
-      return clean(lead.company || lead.raw_company || identity.raw_name, 160).replace(/\s+team$/i, '').trim();
-    }
+    if (identityCurrentVerified(lead)) return clean(identity.greeting_name || identity.brand_name, 160);
+    if (identity) return validCompanyName(lead.company) ? clean(lead.company, 160) : '';
+    return validCompanyName(lead.company) ? clean(lead.company, 160).replace(/\s+team$/i, '').trim() : '';
+  }
 
-    // Compatibility only for leads that have never entered the identity pipeline.
-    const trusted = trustedExplicitName(lead);
-    if (trusted) return trusted;
-    const emailHost = emailDomain(primaryEmail(lead));
-    const leadHost = hostname(lead.domain || lead.url || '');
-    const preferredHost = emailHost && !FREE_EMAIL_DOMAINS.has(registrableDomain(emailHost)) ? emailHost : leadHost;
-    const recovered = recoverMatchingCandidate(lead.company, preferredHost);
-    return recovered || (validCompanyName(lead.company) ? clean(lead.company, 160) : '');
+  function recoverMatchingCandidate() {
+    return '';
   }
 
   function validPersonName(value = '') {
     const name = clean(value, 80);
-    if (!name || name.length > 40 || /\d|@|https?:\/\/|[\[\]{}<>]/i.test(name) || BAD_PERSON_WORDS.test(name)) return false;
+    if (!name || name.length > 40 || /\d|@|https?:\/\/|[\[\]{}<>]/i.test(name) || BAD_PERSON.test(name)) return false;
     const words = name.split(/\s+/).filter(Boolean);
     return words.length >= 1 && words.length <= 3 && words.every(word => /^[A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,28}$/.test(word));
   }
@@ -158,30 +103,13 @@
 
   function sanitizeLead(lead = {}) {
     if (!lead || typeof lead !== 'object') return lead;
-    const identity = identityRecord(lead);
-    const contact = sanitizeContact(lead.contact || null);
-    const contacts = Array.isArray(lead.contacts) ? lead.contacts.map(sanitizeContact) : lead.contacts;
-
-    if (identity) {
-      const company = identityCurrentVerified(lead)
-        ? clean(identity.greeting_name || identity.brand_name, 160)
-        : clean(lead.company || lead.raw_company || identity.raw_name, 160);
-      return {
-        ...lead,
-        company,
-        company_name_source: identityCurrentVerified(lead) ? 'official-evidence-v4' : 'identity-pending-or-needs-review',
-        contact,
-        contacts
-      };
-    }
-
     const company = canonicalCompanyName(lead);
     return {
       ...lead,
       company: company || clean(lead.company, 160),
-      company_name_source: company ? 'legacy-compatible' : lead.company_name_source,
-      contact,
-      contacts
+      company_name_source: identityCurrentVerified(lead) ? 'recipient-email-domain-v5' : lead.company_name_source,
+      contact: sanitizeContact(lead.contact || null),
+      contacts: Array.isArray(lead.contacts) ? lead.contacts.map(sanitizeContact) : lead.contacts
     };
   }
 
@@ -200,29 +128,22 @@
     return `${greeting}\n\n${text.replace(/^\s+/, '')}`;
   }
 
-  function loadJson(key, fallback) {
-    try { return JSON.parse(localStorage.getItem(key) || 'null') ?? fallback; }
-    catch { return fallback; }
-  }
-
   function migrateStorage() {
     if (typeof localStorage === 'undefined') return;
     const leadKey = 'kpa.hunt.leads';
-    const leads = loadJson(leadKey, []);
+    const leads = load(leadKey, []);
     if (!Array.isArray(leads)) return;
     const sanitized = leads.map(sanitizeLead);
     localStorage.setItem(leadKey, JSON.stringify(sanitized));
     const byId = new Map(sanitized.map(lead => [lead.id, lead]));
 
     for (const draftKey of ['kpa.mail.review.drafts.v5', 'kpa.mail.review.drafts.v4']) {
-      const drafts = loadJson(draftKey, {});
+      const drafts = load(draftKey, {});
       if (!drafts || typeof drafts !== 'object') continue;
       let changed = false;
       for (const [id, draft] of Object.entries(drafts)) {
         const lead = byId.get(id);
-        if (!lead || !draft || typeof draft !== 'object') continue;
-        // Any existing identity record is server-owned; only current verified identity can rewrite the greeting.
-        if (identityRecord(lead) && !identityCurrentVerified(lead)) continue;
+        if (!lead || !draft || typeof draft !== 'object' || !identityCurrentVerified(lead)) continue;
         if (typeof draft.body === 'string') {
           const next = rewriteEnglishGreeting(draft.body, lead, false);
           if (next !== draft.body) { draft.body = next; changed = true; }
@@ -241,7 +162,6 @@
     API_VERSION,
     IDENTITY_VERSION,
     hostname,
-    emailDomain,
     registrableDomain,
     domainStem,
     brandFromDomain,
@@ -259,33 +179,4 @@
 
   globalThis.KPA_COMPANY_NAMES = api;
   migrateStorage();
-
-  if (typeof window !== 'undefined') {
-    setTimeout(() => {
-      try {
-        if (globalThis.__kpaCompanyGuardPatchedV4) return;
-        globalThis.__kpaCompanyGuardPatchedV4 = true;
-        if (typeof mergeLeads === 'function') {
-          const originalMergeLeads = mergeLeads;
-          mergeLeads = incoming => originalMergeLeads((incoming || []).map(sanitizeLead));
-        }
-        if (typeof patchLead === 'function') {
-          const originalPatchLead = patchLead;
-          patchLead = (id, patch) => {
-            const current = typeof state !== 'undefined' && Array.isArray(state.leads)
-              ? state.leads.find(lead => lead.id === id) || {}
-              : {};
-            return originalPatchLead(id, sanitizeLead({ ...current, ...(patch || {}) }));
-          };
-        }
-        if (typeof state !== 'undefined' && Array.isArray(state.leads)) {
-          state.leads = state.leads.map(sanitizeLead);
-          if (typeof saveState === 'function') saveState();
-          if (typeof render === 'function') render();
-        }
-      } catch (error) {
-        console.warn('company greeting guard v4 failed', error);
-      }
-    }, 0);
-  }
 })();
