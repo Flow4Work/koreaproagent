@@ -3,6 +3,7 @@
   window.__KPA_CAMPAIGN_RUN_CONTROLLER__ = true;
 
   const KBEAUTY_MIN = 20;
+  const KBEAUTY_QUEUE_KEY = 'kpa.kbeauty.v6.queue';
   const SPECIAL = {
     bcww:{ short:'BCWW', endpoint:'/api/bcww', copy:'BCWW 2026 전용 검색 · 실제 참가 근거 → 해외 회사 → valid 회사 이메일 순서로 검증합니다.' },
     kbeauty:{ short:'K-Beauty', endpoint:'/api/kbeauty', copy:'K-Beauty 2026 · 해외 후보 · 사이트 · 이메일' },
@@ -48,9 +49,27 @@
 
   const basePost = post;
   post = async (url,payload,timeout) => {
-    const result = await basePost(url,payload,timeout);
+    let nextPayload = payload;
+    if (url==='/api/find-contacts' && payload?.action==='kbeauty_domains' && Array.isArray(payload?.items)) {
+      let queued=[];
+      try { queued=JSON.parse(localStorage.getItem(KBEAUTY_QUEUE_KEY)||'[]')||[]; } catch {}
+      const byId=new Map((Array.isArray(queued)?queued:[]).map(item=>[item?.id,item]));
+      nextPayload={
+        ...payload,
+        items:payload.items.map(item=>{
+          const source=byId.get(item?.id)||{};
+          return {
+            ...item,
+            source_url:item?.source_url||source?.source_url||'',
+            domain:item?.domain||source?.domain||'',
+            url:item?.url||source?.url||''
+          };
+        })
+      };
+    }
+    const result = await basePost(url,nextPayload,timeout);
     const id = Object.keys(SPECIAL).find(k => SPECIAL[k].endpoint === url);
-    if (id) window.__kpaCampaignMeta[id] = { ...(result?.meta || {}), cycle:Number(payload?.cycle)||0, returned:Array.isArray(result?.leads)?result.leads.length:Number(result?.meta?.returned)||0 };
+    if (id) window.__kpaCampaignMeta[id] = { ...(result?.meta || {}), cycle:Number(nextPayload?.cycle)||0, returned:Array.isArray(result?.leads)?result.leads.length:Number(result?.meta?.returned)||0 };
     return result;
   };
 
@@ -149,7 +168,7 @@
       try{await runHuntCycle();set('firstRun',id,true);renderMeta(id);}catch(e){if(!state.auto)break;state.statusText=`${SPECIAL[id].short} 이번 회차 실패 · ${String(e?.message||'').slice(0,100)} · 다음 회차 계속`;render();}
       if(!state.auto||state.currentCampaign!==id)break;
       if(id!=='kbeauty'&&Date.now()>=state.autoUntil)break;
-      if(id==='kbeauty') await wait(count(id)<KBEAUTY_MIN?1200:12000,count(id)<KBEAUTY_MIN?1200:6000);
+      if(id==='kbeauty') await wait(count(id)<KBEAUTY_MIN?1200:2500,count(id)<KBEAUTY_MIN?1200:2000);
       else await wait();
     }
 
