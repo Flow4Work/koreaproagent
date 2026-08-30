@@ -71,7 +71,7 @@ test('email discovery unions broad providers and runs NVIDIA plus Prospeo recove
   assert.match(additive, /Promise\.all\(\[exaContacts\(item,exaKey\),tavilyContacts\(item\)\]\)/);
 });
 
-test('K-Beauty auto cycle searches, resolves and enriches additively even with a queue backlog', async () => {
+test('K-Beauty auto cycle searches, resolves and enriches additively without losing concurrent queue additions', async () => {
   const runtime = await source('kbeauty-runtime-v5.js');
   assert.doesNotMatch(runtime, /DISCOVERY_QUEUE_FLOOR/);
   assert.doesNotMatch(runtime, /lane:'queue_backlog'/);
@@ -79,12 +79,17 @@ test('K-Beauty auto cycle searches, resolves and enriches additively even with a
   assert.match(runtime, /discoverMore\(\)/);
   assert.match(runtime, /resolveQueueBatch\(\)/);
   assert.match(runtime, /recoverContacts\(CONTACT_PER_RUN\)/);
+  assert.match(runtime, /const originalIds=new Set/);
+  assert.match(runtime, /const concurrentAdds=queue\(\)\.filter/);
+  assert.match(runtime, /saveQueue\(\[\.\.\.concurrentAdds,\.\.\.remaining\]\)/);
 });
 
-test('K-Beauty sendable UI requires the v6 identity gate and uses the 500 target', async () => {
+test('K-Beauty sendable UI requires stable v6 provenance plus verified identity and uses the 500 target', async () => {
   const eventMode = await source('event-campaigns-mode.js');
   assert.match(eventMode, /function kbeautyIdentityReady\(lead = \{\}\)/);
-  assert.match(eventMode, /K-Beauty v6 evidence \\+ official-domain foreign verification/);
+  assert.match(eventMode, /reasons\.includes\('공식 회사 도메인 검증'\)/);
+  assert.match(eventMode, /reasons\.includes\('해외 법인 확인'\)/);
+  assert.doesNotMatch(eventMode, /verified_by.*K-Beauty v6 evidence/);
   assert.match(eventMode, /identity\?\.status === 'verified'/);
   assert.match(eventMode, /Number\(identity\?\.confidence \|\| 0\) >= 0\.85/);
   assert.match(eventMode, /identityDomain === companyDomain/);
@@ -100,11 +105,11 @@ test('seed refresh uses actual accumulated K-Beauty pool and never owns the hunt
   const index = await source('index.html');
   assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v5-additive\.meta/);
   assert.match(feeder, /existingKeys\(\)\.size >= TARGET/);
-  assert.match(huntUi, /event-campaigns-mode\.js\?v=20260831-kbeauty-stable-gate-v5/);
+  assert.match(huntUi, /event-campaigns-mode\.js\?v=20260831-kbeauty-stable-gate-v6/);
   assert.match(huntUi, /campaign-run-controller\.js\?v=20260831-kbeauty-button-contract-v9/);
-  assert.match(huntUi, /kbeauty-runtime-v5\.js\?v=20260831-additive-union-v10/);
+  assert.match(huntUi, /kbeauty-runtime-v5\.js\?v=20260831-additive-union-v11-racefix/);
   assert.match(huntUi, /kbeauty-seed-feeder\.js\?v=20260831-seed-union-v5-additive/);
-  assert.match(index, /hunt-ui\.js\?v=20260831-kbeauty-additive-v10/);
+  assert.match(index, /hunt-ui\.js\?v=20260831-kbeauty-additive-v11-racefix/);
   assert.doesNotMatch(feeder, /textContent\s*=\s*['"](?:후보 찾기|진정시키기|자동사냥)/);
   assert.match(controller, /id==='kbeauty'\?'진정시키기'/);
   assert.match(controller, /if\(id==='kbeauty'\)\{b\.textContent='후보 찾기'/);
