@@ -34,7 +34,9 @@
     const identity = lead?.company_identity || {};
     const companyDomain = typeof rootHost === 'function' ? rootHost(lead.domain || lead.url || '') : '';
     const identityDomain = typeof rootHost === 'function' ? rootHost(identity.domain || '') : '';
-    return /^K-Beauty v6 evidence \+ official-domain foreign verification$/i.test(cleanText(lead?.verified_by,160))
+    const reasons = Array.isArray(lead?.quality_reasons) ? lead.quality_reasons.map(value => cleanText(value,180)) : [];
+    const v6Verified = reasons.includes('공식 회사 도메인 검증') && reasons.includes('해외 법인 확인');
+    return v6Verified
       && identity?.status === 'verified'
       && Number(identity?.confidence || 0) >= 0.85
       && Boolean(cleanText(identity?.greeting_name,120))
