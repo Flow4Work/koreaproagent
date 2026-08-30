@@ -2,6 +2,7 @@
   const LEADS_KEY = 'kpa.hunt.leads';
   const SELECTED_KEY = 'kpa.hunt.selected';
   const REVIEW_IDS_KEY = 'kpa.mail.review.ids';
+  const IDENTITY_VERSION = '20260830-email-domain-identity-v5';
 
   function loadJson(key, fallback) {
     try {
@@ -40,14 +41,53 @@
     return loadJson(SELECTED_KEY, []).filter(Boolean);
   }
 
-  function openReview(ids) {
+  function verifiedIdentity(lead = {}) {
+    const identity = lead?.company_identity;
+    return Boolean(identity
+      && identity.identity_version === IDENTITY_VERSION
+      && identity.status === 'verified'
+      && Number(identity.confidence || 0) >= 0.85
+      && String(identity.greeting_name || '').trim());
+  }
+
+  async function ensureCompanyIdentities(ids) {
+    const refresh = globalThis.KPA_COMPANY_IDENTITY_REFRESH;
+    if (typeof refresh !== 'function') throw new Error('회사명 확인 기능을 불러오지 못했습니다. 페이지를 새로고침한 뒤 다시 시도해주세요.');
+    await refresh(ids, { force: true });
+
+    const byId = new Map(loadJson(LEADS_KEY, []).map(lead => [lead.id, lead]));
+    const unresolved = ids.map(id => byId.get(id)).filter(lead => lead && !verifiedIdentity(lead));
+    if (unresolved.length) {
+      const names = unresolved.slice(0, 5).map(lead => lead.raw_company || lead.company || lead.domain || '회사').join(', ');
+      const more = unresolved.length > 5 ? ` 외 ${unresolved.length - 5}곳` : '';
+      throw new Error(`수신 이메일 도메인으로 회사명을 확정하지 못한 곳이 ${unresolved.length}곳 있습니다: ${names}${more}`);
+    }
+  }
+
+  async function openReview(ids, trigger = null) {
     const unique = [...new Set(ids.filter(Boolean))];
     if (!unique.length) {
       alert('먼저 메일을 준비할 후보를 선택해주세요.');
       return;
     }
-    saveJson(REVIEW_IDS_KEY, unique);
-    location.href = '/mail-review.html';
+
+    const originalText = trigger?.textContent || '';
+    if (trigger) {
+      trigger.disabled = true;
+      trigger.textContent = '회사명 확인 중…';
+    }
+
+    try {
+      await ensureCompanyIdentities(unique);
+      saveJson(REVIEW_IDS_KEY, unique);
+      location.href = '/mail-review.html';
+    } catch (error) {
+      alert(error?.message || '회사명 확인에 실패했습니다.');
+      if (trigger) {
+        trigger.disabled = false;
+        trigger.textContent = originalText;
+      }
+    }
   }
 
   function rowLeadId(anchor) {
@@ -62,7 +102,7 @@
     button.type = 'button';
     button.className = 'primary mail-prepare-bulk';
     button.textContent = '선택한 메일 준비하기';
-    button.addEventListener('click', () => openReview(selectedIds()));
+    button.addEventListener('click', () => openReview(selectedIds(), button));
     actions.insertBefore(button, document.getElementById('runBtn'));
   }
 
@@ -119,7 +159,7 @@
 
   function updateBulkButton() {
     const button = document.getElementById('prepareSelectedBtn');
-    if (!button) return;
+    if (!button || button.textContent === '회사명 확인 중…') return;
     const count = selectedIds().length;
     const nextText = count ? `선택한 메일 준비하기 (${count})` : '선택한 메일 준비하기';
     const nextDisabled = count === 0;
@@ -133,7 +173,7 @@
     event.preventDefault();
     event.stopImmediatePropagation();
     const id = rowLeadId(anchor);
-    if (id) openReview([id]);
+    if (id) openReview([id], anchor);
   }, true);
 
   document.addEventListener('click', event => {
