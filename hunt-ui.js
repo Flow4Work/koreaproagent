@@ -104,7 +104,7 @@
     if (document.querySelector('script[data-campaign-run-controller]')) return;
     if (typeof CAMPAIGNS !== 'undefined' && CAMPAIGNS.bcww && CAMPAIGNS.wsce && document.querySelector('script[data-international-event-mode]')) {
       const script = document.createElement('script');
-      script.src = '/campaign-run-controller.js?v=20260816-kbeauty-clean-v3';
+      script.src = '/campaign-run-controller.js?v=20260830-kbeauty-throughput-v8';
       script.dataset.campaignRunController = '1';
       document.head.appendChild(script);
       return;
