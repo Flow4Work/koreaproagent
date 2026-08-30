@@ -8,7 +8,7 @@ import { parseJinaDirectory } from '../lib/kbeauty-jina-seeds.js';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const source = file => readFile(path.join(root, file), 'utf8');
 
-test('K-Beauty seed collection unions Jina-rendered and Tavily-backed current 2026 directories', async () => {
+test('K-Beauty seed collection unions paginated Jina-rendered and Tavily-backed current 2026 directories', async () => {
   const seeds = await source('lib/kbeauty-seeds-2026.js');
   const jina = await source('lib/kbeauty-jina-seeds.js');
   assert.match(seeds, /collectJinaOfficial2026Seeds/);
@@ -19,8 +19,10 @@ test('K-Beauty seed collection unions Jina-rendered and Tavily-backed current 20
   assert.match(seeds, /TAVILY_CRAWL_URL/);
   assert.doesNotMatch(seeds, /exhi_list02\.asp/);
   assert.match(jina, /JINA_READER_URL = 'https:\/\/r\.jina\.ai\/'/);
+  assert.match(jina, /INTERCHARM_PAGE_COUNT = 28/);
   assert.match(jina, /process\.env\.JINA_API_KEY/);
-  assert.match(jina, /Promise\.all\(SOURCES\.map/);
+  assert.match(jina, /function pagedSources\(\)/);
+  assert.match(jina, /mapLimit\(pagedSources\(\),12/);
 });
 
 test('Jina rendered directory parser extracts exhibitor cards but not directory UI labels', () => {
