@@ -1,5 +1,6 @@
 import { contactDiscoveryConfigured as hunterConfigured, findContacts, normalizeContacts } from '../lib/contact-discovery.js';
 import { findKBeautyContactsFast } from '../lib/kbeauty-fast-contact-v4.js';
+import { findKBeautyAdditiveContacts, mergeKBeautyContactRows } from '../lib/kbeauty-additive-contact.js';
 import { nvidiaKBeautyConfigured, recoverKBeautyContactRows } from '../lib/kbeauty-nvidia-recovery.js';
 import { prospeoConfigured, recoverKBeautyContactsWithProspeo } from '../lib/kbeauty-prospeo-recovery.js';
 import { resolveKBeautyDomainsV5 } from '../lib/kbeauty-domain-resolver-v5.js';
@@ -34,7 +35,7 @@ export async function POST(request) {
       const results = await resolveKBeautyDomainsV5(body.items || [], clean(body.exaKey, 5000));
       return Response.json({
         results,
-        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,12):0,pipeline:'kbeauty-domain-v5'}
+        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,18):0,pipeline:'kbeauty-domain-v5'}
       }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       console.error('[kbeauty_domains] fatal', clean(e?.message || e, 400));
@@ -42,11 +43,18 @@ export async function POST(request) {
     }
   }
 
-  // Legacy one-company deep fallback. V5 no longer uses this as the primary/batch path.
+  // K-Beauty contact providers are additive: broad search/crawl providers run together,
+  // then scarce enrichment providers only recover what the union still missed.
   if (body.action === 'kbeauty_fast') {
     try {
-      const baseResults = await findKBeautyContactsFast(body.items || [], clean(body.exaKey, 5000));
-      const recoveredResults = await recoverKBeautyContactRows(baseResults, body.items || []);
+      const items = body.items || [];
+      const exaKey = clean(body.exaKey, 5000);
+      const [baseResults, additiveResults] = await Promise.all([
+        findKBeautyContactsFast(items, exaKey),
+        findKBeautyAdditiveContacts(items, exaKey)
+      ]);
+      const unionResults = mergeKBeautyContactRows(baseResults, additiveResults);
+      const recoveredResults = await recoverKBeautyContactRows(unionResults, items);
       const results = await recoverKBeautyContactsWithProspeo(recoveredResults);
       const providers=providerSummary(results);
       const hardFailures=providers.filter(row=>row.failed>0 && !Object.keys(row.errors||{}).every(error=>['not_configured','no_match','no_email','no_domain_match','missing_domain','no_person_match','no_verified_email','temporarily_disabled'].includes(error)));
@@ -56,7 +64,7 @@ export async function POST(request) {
         hunterConfigured:Boolean(process.env.HUNTER_API_KEY),
         nvidiaConfigured:nvidiaKBeautyConfigured(),
         prospeoConfigured:prospeoConfigured(),
-        meta:{batch_size:Array.isArray(body.items)?Math.min(body.items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-v4+nvidia+prospeo-recovery'}
+        meta:{batch_size:Array.isArray(items)?Math.min(items.length,6):0,provider_status:providers,pipeline:'kbeauty-email-additive-union+nvidia+prospeo-recovery'}
       }, { headers:{'Cache-Control':'no-store'} });
     } catch (e) {
       console.error('[kbeauty_fast] fatal', clean(e?.message || e, 400));
