@@ -66,13 +66,17 @@
   }
 
   function rewriteDraftGreeting(draft, greeting) {
-    if (!draft || !greeting) return;
+    if (!draft || !greeting) return false;
+    let changed = false;
     if (typeof draft.body === 'string') {
-      draft.body = draft.body.replace(/^Hi[^\n]*,\s*/i, `Hi ${greeting} team,\n\n`);
+      const next = draft.body.replace(/^Hi[^\n]*,\s*/i, `Hi ${greeting} team,\n\n`);
+      if (next !== draft.body) { draft.body = next; changed = true; }
     }
     if (typeof draft.translation === 'string') {
-      draft.translation = draft.translation.replace(/^안녕하세요[^\n]*[.!]?\s*/, `안녕하세요, ${greeting} 팀.\n\n`);
+      const next = draft.translation.replace(/^안녕하세요[^\n]*[.!]?\s*/, `안녕하세요, ${greeting} 팀.\n\n`);
+      if (next !== draft.translation) { draft.translation = next; changed = true; }
     }
+    return changed;
   }
 
   function applyGuard() {
@@ -94,6 +98,10 @@
           if (lead.company_identity) lead.company_identity.greeting_name = greeting;
           leadsChanged = true;
         }
+        if (lead.identity_ui_blocked) {
+          delete lead.identity_ui_blocked;
+          leadsChanged = true;
+        }
         for (const drafts of Object.values(draftsByKey)) {
           const draft = drafts?.[lead.id];
           if (!draft) continue;
@@ -104,12 +112,14 @@
             delete draft.identityAutoExcluded;
             draftsChanged = true;
           }
-          rewriteDraftGreeting(draft, greeting || clean(lead.company, 120));
+          if (rewriteDraftGreeting(draft, greeting || clean(lead.company, 120))) draftsChanged = true;
         }
       } else {
-        lead.identity_ui_blocked = true;
-        lead.contact_status = 'identity_needs_review';
-        leadsChanged = true;
+        if (!lead.identity_ui_blocked || lead.contact_status !== 'identity_needs_review') {
+          lead.identity_ui_blocked = true;
+          lead.contact_status = 'identity_needs_review';
+          leadsChanged = true;
+        }
         for (const drafts of Object.values(draftsByKey)) {
           const draft = drafts?.[lead.id] || (drafts[lead.id] = {});
           if (draft.identityAutoExcluded !== true) {
