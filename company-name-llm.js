@@ -2,7 +2,7 @@
   const LEADS_KEY = 'kpa.hunt.leads';
   const DRAFT_KEYS = ['kpa.mail.review.drafts.v5', 'kpa.mail.review.drafts.v4'];
   const IDS_KEY = 'kpa.mail.review.ids';
-  const VERSION = '20260830-company-identity-v3';
+  const VERSION = '20260830-company-identity-v4';
   let running = false;
   let rerun = false;
   const refreshInFlight = new Set();
@@ -201,8 +201,8 @@
       lead.company = greeting;
       lead.domain = officialDomain;
       lead.url = `https://${officialDomain}/`;
-      lead.company_name_source = 'official-evidence-v3';
-      lead.verified_by = 'official-site-evidence-v3';
+      lead.company_name_source = 'official-evidence-v4';
+      lead.verified_by = 'official-site-evidence-v4';
 
       const allCandidates = classifyContacts([...previousCandidates, ...officialContacts(identity)], identity);
       lead.contact_candidates = allCandidates;
@@ -224,7 +224,7 @@
 
       for (const drafts of Object.values(draftsByKey)) updateDraftGreetings(lead, drafts);
     } else {
-      lead.company_name_source = 'identity-needs-review-v3';
+      lead.company_name_source = 'identity-needs-review-v4';
       lead.contact_candidates = previousCandidates;
     }
 
@@ -400,18 +400,18 @@
 
   function wrapLeadMutations(attempt = 0) {
     let patched = false;
-    if (typeof mergeLeads === 'function' && !mergeLeads.__companyIdentityWrappedV3) {
+    if (typeof mergeLeads === 'function' && !mergeLeads.__companyIdentityWrappedV4) {
       const original = mergeLeads;
       const wrapped = function() {
         const result = original.apply(this, arguments);
         setTimeout(resolvePending, 0);
         return result;
       };
-      wrapped.__companyIdentityWrappedV3 = true;
+      wrapped.__companyIdentityWrappedV4 = true;
       mergeLeads = wrapped;
       patched = true;
     }
-    if (typeof patchLead === 'function' && !patchLead.__companyIdentityWrappedV3) {
+    if (typeof patchLead === 'function' && !patchLead.__companyIdentityWrappedV4) {
       const original = patchLead;
       const wrapped = function(id, patch) {
         const nextPatch = { ...(patch || {}) };
@@ -424,7 +424,7 @@
         setTimeout(resolvePending, 0);
         return result;
       };
-      wrapped.__companyIdentityWrappedV3 = true;
+      wrapped.__companyIdentityWrappedV4 = true;
       patchLead = wrapped;
       patched = true;
     }

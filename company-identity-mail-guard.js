@@ -2,7 +2,7 @@
   const LEADS_KEY = 'kpa.hunt.leads';
   const IDS_KEY = 'kpa.mail.review.ids';
   const DRAFT_KEYS = ['kpa.mail.review.drafts.v5', 'kpa.mail.review.drafts.v4'];
-  const VERSION = '20260830-company-identity-v3';
+  const VERSION = '20260830-company-identity-v4';
   const MULTI_SUFFIXES = new Set([
     'ac.kr','co.kr','go.kr','ne.kr','or.kr','re.kr','pe.kr','ac.uk','co.uk','gov.uk','ltd.uk','me.uk','net.uk','nhs.uk','org.uk','plc.uk','sch.uk',
     'asn.au','com.au','edu.au','gov.au','id.au','net.au','org.au','ac.jp','co.jp','go.jp','ne.jp','or.jp','com.br','com.cn','com.hk','com.mx','com.sg',
@@ -53,6 +53,13 @@
       .map(value => clean(value, 600)).filter(Boolean))];
   }
 
+  function providers(contact = {}) {
+    return [...new Set([
+      ...(Array.isArray(contact?.providers) ? contact.providers : []),
+      ...String(contact?.provider || '').split('+')
+    ].map(value => clean(value, 80).toLowerCase()).filter(Boolean))];
+  }
+
   function officialEmailSet(identity = {}) {
     return new Set((Array.isArray(identity?.official_emails) ? identity.official_emails : [])
       .map(item => clean(typeof item === 'string' ? item : item?.email, 240).toLowerCase())
@@ -63,23 +70,27 @@
     const email = clean(contact?.email, 240).toLowerCase();
     if (!email || identity?.identity_version !== VERSION || identity?.status !== 'verified') return false;
 
-    // Strongest evidence: the exact address appears on the verified official site,
-    // even if the mail domain differs from the website domain.
     if (officialEmailSet(identity).has(email)) return true;
 
     const status = statusOf(contact);
     const officialDomain = rootDomain(identity.domain);
     const emailDomain = rootDomain(email);
-    if (officialDomain && emailDomain === officialDomain && status === 'valid') return true;
+    const hasEvidence = sourceUrls(contact).length > 0;
+    const providerList = providers(contact);
 
-    // Explicit cross-domain exceptions require both a deliberate trust flag and evidence.
+    // Same-company-domain contacts remain sendable when a provider/evidence already qualified them.
+    // This keeps broad email discovery intact while still rejecting known-invalid addresses.
+    if (officialDomain && emailDomain === officialDomain && status !== 'invalid') {
+      return status === 'valid' || contact?.qualified === true || hasEvidence || providerList.includes('hunter');
+    }
+
+    // Different mail domains require explicit company linkage from a verified source.
     const explicitlyTrusted = contact?.trustedCrossDomain === true;
     const explicitlyVerified = contact?.verifiedOverride === true || contact?.verified_override === true;
-    return explicitlyTrusted && explicitlyVerified && sourceUrls(contact).length > 0 && status !== 'invalid';
+    return explicitlyTrusted && explicitlyVerified && hasEvidence && status !== 'invalid';
   }
 
-  function allowedContacts(lead = {}) {
-    const identity = lead.company_identity || {};
+  function allContacts(lead = {}) {
     const rows = [
       lead.contact,
       ...(Array.isArray(lead.contacts) ? lead.contacts : []),
@@ -88,8 +99,15 @@
     const map = new Map();
     for (const contact of rows) {
       const email = clean(contact?.email, 240).toLowerCase();
-      if (!email || map.has(email) || !strictlySendable(contact, identity)) continue;
-      map.set(email, { ...contact, send_allowed: true });
+      if (!email) continue;
+      const current = map.get(email) || {};
+      map.set(email, {
+        ...current,
+        ...contact,
+        email,
+        sources: [...new Set([...sourceUrls(current), ...sourceUrls(contact)])],
+        providers: [...new Set([...providers(current), ...providers(contact)])]
+      });
     }
     return [...map.values()];
   }
@@ -108,6 +126,15 @@
     return changed;
   }
 
+  function restoreLegacyAutoExclusion(draft) {
+    if (!draft || draft.identityAutoExcluded !== true) return false;
+    // v3 mistakenly converted validation state into a user selection state.
+    // Restore only those automatic exclusions; manual unchecked choices remain untouched.
+    draft.included = true;
+    delete draft.identityAutoExcluded;
+    return true;
+  }
+
   function applyGuard() {
     const leads = load(LEADS_KEY, []);
     const ids = new Set(load(IDS_KEY, []));
@@ -120,7 +147,6 @@
       if (!lead?.id || !ids.has(lead.id)) continue;
       const isVerified = verified(lead);
       const greeting = isVerified ? clean(lead.company_identity?.greeting_name, 120) : '';
-      const sendable = isVerified ? allowedContacts(lead) : [];
 
       if (isVerified) {
         if (greeting && lead.company !== greeting) {
@@ -133,53 +159,24 @@
           delete lead.identity_ui_blocked;
           leadsChanged = true;
         }
-        if (JSON.stringify(lead.contacts || []) !== JSON.stringify(sendable)) {
-          lead.contacts = sendable;
-          lead.contact = sendable.find(contact => contact.qualified) || sendable[0] || null;
+        const candidates = allContacts(lead).map(contact => ({
+          ...contact,
+          send_allowed: strictlySendable(contact, lead.company_identity)
+        }));
+        if (JSON.stringify(lead.contact_candidates || []) !== JSON.stringify(candidates)) {
+          lead.contact_candidates = candidates;
           leadsChanged = true;
         }
+      } else if (!lead.identity_ui_blocked) {
+        lead.identity_ui_blocked = true;
+        leadsChanged = true;
+      }
 
-        for (const drafts of Object.values(draftsByKey)) {
-          const draft = drafts?.[lead.id];
-          if (!draft) continue;
-          if (rewriteDraftGreeting(draft, greeting)) draftsChanged = true;
-
-          const allowedEmails = new Set(sendable.map(contact => clean(contact.email, 240).toLowerCase()));
-          const currentSelected = Array.isArray(draft.selectedEmails)
-            ? draft.selectedEmails.map(email => clean(email, 240).toLowerCase()).filter(Boolean)
-            : [];
-          const retained = currentSelected.filter(email => allowedEmails.has(email));
-          const nextSelected = retained.length ? retained : [...allowedEmails].slice(0, 4);
-          if (JSON.stringify(currentSelected) !== JSON.stringify(nextSelected)) {
-            draft.selectedEmails = nextSelected;
-            draft.to = nextSelected.join(', ');
-            draftsChanged = true;
-          }
-
-          if (draft.identityAutoExcluded === true && sendable.length) {
-            draft.included = true;
-            delete draft.identityAutoExcluded;
-            draftsChanged = true;
-          }
-          if (!sendable.length && draft.identityAutoExcluded !== true) {
-            draft.identityAutoExcluded = true;
-            draft.included = false;
-            draftsChanged = true;
-          }
-        }
-      } else {
-        if (!lead.identity_ui_blocked) {
-          lead.identity_ui_blocked = true;
-          leadsChanged = true;
-        }
-        for (const drafts of Object.values(draftsByKey)) {
-          const draft = drafts?.[lead.id] || (drafts[lead.id] = {});
-          if (draft.identityAutoExcluded !== true || draft.included !== false) {
-            draft.identityAutoExcluded = true;
-            draft.included = false;
-            draftsChanged = true;
-          }
-        }
+      for (const drafts of Object.values(draftsByKey)) {
+        const draft = drafts?.[lead.id];
+        if (!draft) continue;
+        if (restoreLegacyAutoExclusion(draft)) draftsChanged = true;
+        if (isVerified && rewriteDraftGreeting(draft, greeting)) draftsChanged = true;
       }
     }
 
@@ -189,7 +186,7 @@
     }
   }
 
-  // Second fail-closed layer: manual edits in the To field cannot bypass the strict evidence rule.
+  // Sending remains fail-closed, but validation must never silently change the user's include checkboxes.
   document.addEventListener('click', event => {
     const button = event.target?.closest?.('#sendAllBtn');
     if (!button) return;
@@ -204,13 +201,13 @@
       if (!verified(lead)) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        alert(`발송 중지: ${clean(lead.raw_company || lead.company, 100)}의 공식 브랜드명이 검증되지 않았습니다.`);
+        alert(`발송 중지: ${clean(lead.raw_company || lead.company, 100)}의 공식 브랜드명이 아직 검증되지 않았습니다.`);
         return;
       }
       const selected = Array.isArray(draft.selectedEmails)
         ? draft.selectedEmails
         : String(draft.to || '').split(/[\s,;]+/).filter(Boolean);
-      const candidates = [lead.contact, ...(lead.contacts || []), ...(lead.contact_candidates || [])].filter(Boolean);
+      const candidates = allContacts(lead);
       for (const email of selected) {
         const normalized = clean(email, 240).toLowerCase();
         const contact = candidates.find(row => clean(row?.email, 240).toLowerCase() === normalized) || { email: normalized };

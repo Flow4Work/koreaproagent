@@ -1,6 +1,6 @@
 (() => {
-  const API_VERSION = '20260830-company-identity-v3-compat';
-  const IDENTITY_VERSION = '20260830-company-identity-v3';
+  const API_VERSION = '20260830-company-identity-v4-compat';
+  const IDENTITY_VERSION = '20260830-company-identity-v4';
   const MULTI_LABEL_SUFFIXES = new Set([
     'ac.kr','co.kr','go.kr','ne.kr','or.kr','re.kr','pe.kr','ac.uk','co.uk','gov.uk','ltd.uk','me.uk','net.uk','nhs.uk','org.uk','plc.uk','sch.uk',
     'asn.au','com.au','edu.au','gov.au','id.au','net.au','org.au','ac.jp','co.jp','go.jp','ne.jp','or.jp','com.br','com.cn','com.hk','com.mx','com.sg',
@@ -81,13 +81,13 @@
     return identity && typeof identity === 'object' ? identity : null;
   }
 
-  function identityV3(lead = {}) {
+  function identityCurrent(lead = {}) {
     const identity = identityRecord(lead);
     return identity?.identity_version === IDENTITY_VERSION ? identity : null;
   }
 
-  function identityV3Verified(lead = {}) {
-    const identity = identityV3(lead);
+  function identityCurrentVerified(lead = {}) {
+    const identity = identityCurrent(lead);
     return Boolean(identity
       && identity.status === 'verified'
       && Number(identity.confidence || 0) >= 0.85
@@ -113,8 +113,8 @@
   function canonicalCompanyName(lead = {}) {
     const identity = identityRecord(lead);
     if (identity) {
-      if (identityV3Verified(lead)) return clean(identity.greeting_name || identity.brand_name, 160);
-      // Once an identity record exists, never reconstruct the brand from a URL/email while v3 is pending or unresolved.
+      if (identityCurrentVerified(lead)) return clean(identity.greeting_name || identity.brand_name, 160);
+      // Once an identity record exists, never reconstruct the brand from a URL/email while identity verification is pending.
       return clean(lead.company || lead.raw_company || identity.raw_name, 160).replace(/\s+team$/i, '').trim();
     }
 
@@ -163,13 +163,13 @@
     const contacts = Array.isArray(lead.contacts) ? lead.contacts.map(sanitizeContact) : lead.contacts;
 
     if (identity) {
-      const company = identityV3Verified(lead)
+      const company = identityCurrentVerified(lead)
         ? clean(identity.greeting_name || identity.brand_name, 160)
         : clean(lead.company || lead.raw_company || identity.raw_name, 160);
       return {
         ...lead,
         company,
-        company_name_source: identityV3Verified(lead) ? 'official-evidence-v3' : 'identity-pending-or-needs-review',
+        company_name_source: identityCurrentVerified(lead) ? 'official-evidence-v4' : 'identity-pending-or-needs-review',
         contact,
         contacts
       };
@@ -221,8 +221,8 @@
       for (const [id, draft] of Object.entries(drafts)) {
         const lead = byId.get(id);
         if (!lead || !draft || typeof draft !== 'object') continue;
-        // Any existing identity record is server-owned; only v3 verified identity can rewrite the greeting.
-        if (identityRecord(lead) && !identityV3Verified(lead)) continue;
+        // Any existing identity record is server-owned; only current verified identity can rewrite the greeting.
+        if (identityRecord(lead) && !identityCurrentVerified(lead)) continue;
         if (typeof draft.body === 'string') {
           const next = rewriteEnglishGreeting(draft.body, lead, false);
           if (next !== draft.body) { draft.body = next; changed = true; }
@@ -263,8 +263,8 @@
   if (typeof window !== 'undefined') {
     setTimeout(() => {
       try {
-        if (globalThis.__kpaCompanyGuardPatchedV3) return;
-        globalThis.__kpaCompanyGuardPatchedV3 = true;
+        if (globalThis.__kpaCompanyGuardPatchedV4) return;
+        globalThis.__kpaCompanyGuardPatchedV4 = true;
         if (typeof mergeLeads === 'function') {
           const originalMergeLeads = mergeLeads;
           mergeLeads = incoming => originalMergeLeads((incoming || []).map(sanitizeLead));
@@ -284,7 +284,7 @@
           if (typeof render === 'function') render();
         }
       } catch (error) {
-        console.warn('company greeting guard v3 failed', error);
+        console.warn('company greeting guard v4 failed', error);
       }
     }, 0);
   }
