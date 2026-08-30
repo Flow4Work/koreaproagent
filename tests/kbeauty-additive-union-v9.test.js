@@ -81,6 +81,18 @@ test('K-Beauty auto cycle searches, resolves and enriches additively even with a
   assert.match(runtime, /recoverContacts\(CONTACT_PER_RUN\)/);
 });
 
+test('K-Beauty sendable UI requires the v6 identity gate and uses the 500 target', async () => {
+  const eventMode = await source('event-campaigns-mode.js');
+  assert.match(eventMode, /function kbeautyIdentityReady\(lead = \{\}\)/);
+  assert.match(eventMode, /K-Beauty v6 evidence \\+ official-domain foreign verification/);
+  assert.match(eventMode, /identity\?\.status === 'verified'/);
+  assert.match(eventMode, /Number\(identity\?\.confidence \|\| 0\) >= 0\.85/);
+  assert.match(eventMode, /identityDomain === companyDomain/);
+  assert.match(eventMode, /<span>목표 500<\/span>/);
+  assert.doesNotMatch(eventMode, /목표 \$\{Math\.min\(leads\.length,20\)\}\/20/);
+  assert.doesNotMatch(eventMode, /targetFloor:20/);
+});
+
 test('seed refresh uses actual accumulated K-Beauty pool and never owns the hunt button', async () => {
   const feeder = await source('kbeauty-seed-feeder.js');
   const controller = await source('campaign-run-controller.js');
@@ -88,6 +100,7 @@ test('seed refresh uses actual accumulated K-Beauty pool and never owns the hunt
   const index = await source('index.html');
   assert.match(feeder, /kpa\.kbeauty\.seed2026\.union-v5-additive\.meta/);
   assert.match(feeder, /existingKeys\(\)\.size >= TARGET/);
+  assert.match(huntUi, /event-campaigns-mode\.js\?v=20260831-kbeauty-stable-gate-v5/);
   assert.match(huntUi, /campaign-run-controller\.js\?v=20260831-kbeauty-button-contract-v9/);
   assert.match(huntUi, /kbeauty-runtime-v5\.js\?v=20260831-additive-union-v10/);
   assert.match(huntUi, /kbeauty-seed-feeder\.js\?v=20260831-seed-union-v5-additive/);
