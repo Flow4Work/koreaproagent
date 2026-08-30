@@ -26,6 +26,7 @@
     "api/bcww.js": {"maxDuration": 120},
     "api/wsce.js": {"maxDuration": 120},
     "api/kbeauty.js": {"maxDuration": 120},
+    "api/kbeauty-seeds.js": {"maxDuration": 120},
     "api/education-fair.js": {"maxDuration": 120},
     "api/contact.js": {"maxDuration": 120},
     "api/find-contacts.js": {"maxDuration": 120},
