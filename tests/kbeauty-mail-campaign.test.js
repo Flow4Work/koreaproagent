@@ -45,3 +45,12 @@ test('K-Beauty company-name guard removes obvious page-title names before the gr
   assert.match(text, /company_name_source = 'kbeauty-mail-display-guard-v1'/);
   assert.match(text, /lead\?\.campaign !== 'kbeauty'/);
 });
+
+test('KBW package-price UI is loaded only when every selected review lead is actually KBW', async () => {
+  const html = await source('mail-review.html');
+  const loader = await source('kbw-package-email-loader.js');
+  assert.match(html, /kbw-package-email-loader\.js\?v=20260901-kbw-only-v1/);
+  assert.doesNotMatch(html, /<script src="\/kbw-package-email\.js/);
+  assert.match(loader, /selected\.some\(lead => lead\?\.campaign !== 'kbw'\)/);
+  assert.match(loader, /script\.src = '\/kbw-package-email\.js\?v=20260806-kbw-package-email-v1'/);
+});
